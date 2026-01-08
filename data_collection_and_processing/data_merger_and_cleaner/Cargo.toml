@@ -1,0 +1,15 @@
+[package]
+name = "json_merger"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.11", features = ["json"] }
+futures = "0.3"
+glob = "0.3"
+dotenv = "0.15"
+indicatif = "0.17"                                  # For progress bars
+anyhow = "1.0"

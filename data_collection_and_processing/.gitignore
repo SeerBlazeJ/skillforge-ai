@@ -1,1 +1,8 @@
 /datasets
+personalinfo.txt
+yt_data_collector/*.json
+data_processor/Cargo.lock
+data_processor/target/
+processed_datasets
+*/Cargo.lock
+*/target
