@@ -136,7 +136,7 @@ async fn main() -> Result<()> {
         // We use serde_json::from_reader.
         // Note: For truly massive files, we might need a streaming parser,
         // but standard huge files (up to few hundred MBs) fit in RAM fine.
-        let collection: VideoCollection = serde_json::from_reader(reader)?;
+        let collection: VideoCollection = serde_json::from_reader(reader)?;2
 
         for video in collection.videos {
             // Deduplication Logic: Check ID immediately

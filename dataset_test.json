@@ -1,0 +1,80 @@
+{
+    "data": [
+        {
+            "title": "App Dev: Adding User Authentication to your Application - Python",
+            "description": "This is a self-paced lab that takes place in the Google Cloud console. In this lab, you will enhance the online Quiz application to use Firebase authentication.",
+            "channel_name": "coursera",
+            "published_date": "2023-10-27T10:00:00Z",
+            "skill_path": "Cloud Computing > Google Cloud > App Development",
+            "level": "Intermediate",
+            "type": "macro",
+            "content": "In this self-paced lab, you will enhance an online Quiz application by integrating Firebase authentication. The lab takes place in the Google Cloud console and covers the necessary steps to secure the application user base.",
+            "topic": "app_dev_firebase_auth",
+            "prerequisite_topics": [
+                "python_basics",
+                "google_cloud_platform_basics",
+                "web_development_fundamentals"
+            ]
+        },
+        {
+            "title": "Advanced Python - Reconnaissance",
+            "description": "Welcome to advanced Python for Cybersecurity. The Reconnaissance course demonstrates the use of Python to automate the process of performing reconnaissance on target environments. We will also demonstrate how Python can be used to automate a password guessing attach to gain initial access to a target environment.",
+            "channel_name": "coursera",
+            "published_date": "2023-01-01T00:00:00Z",
+            "skill_path": "Cybersecurity",
+            "level": "mixed",
+            "type": "macro",
+            "content": "",
+            "topic": "python_reconnaissance",
+            "prerequisite_topics": [
+                "python_basics",
+                "network_security"
+            ]
+        },
+        {
+            "title": "Amazon Braket Getting Started",
+            "description": "Amazon Braket is the fully managed quantum computing service on Amazon Web Services (AWS). In this course, you will learn the benefits and technical concepts of Braket. If you are new to the service, you will learn how to start with Braket through a demonstration using the AWS Management Console. You will learn about the native architecture and how the built-in features can help you explore quantum computing.",
+            "channel_name": "coursera",
+            "published_date": "2024-01-15T12:00:00Z",
+            "skill_path": "Cloud Computing -> Quantum Computing",
+            "level": "Beginner",
+            "type": "macro",
+            "content": "",
+            "topic": "quantum_computing",
+            "prerequisite_topics": [
+                "cloud_computing",
+                "aws_basics"
+            ]
+        },
+        {
+            "title": "Fundamentals of Business Problem Solving",
+            "description": "This course introduces how to classify data and create models used to solve business models. Learners will use Solver to create expressions to find optimal paths for business problems. Modules: Introduction to Business Problem Solving: This module introduces the key components of a business model. It also provides an overview of how to use Solver in Microsoft Excel. Creating a Basic Business Model: This module describes how to create a spreadsheet model for a business problem and use data points to analyze the trends. Building Different Model Types: This module focuses on how to build and solve business problems related to profit and product mix models. Model Optimization: This module explains how to use Solver in Microsoft Excel to optimize business models.",
+            "channel_name": "coursera",
+            "published_date": "2023-10-27T10:00:00Z",
+            "skill_path": "Business Analysis and Optimization",
+            "level": "Intermediate",
+            "type": "macro",
+            "content": "",
+            "topic": "business_problem_solving",
+            "prerequisite_topics": [
+                "spreadsheet_basics",
+                "business_fundamentals"
+            ]
+        },
+        {
+            "title": "Anatomy: Cardiovascular, Respiratory and Urinary Systems",
+            "description": "In this anatomy course, part of the Anatomy Specialization, you will explore the interactive relationships of the cardiovascular, respiratory and urinary systems, and the roles they play in your body. This course is a primer for the cardiovascular, respiratory, and urinary systems in which students learn the pertinent details of the structures and functions through a combination of lectures, videos, labeling activities and quizzes.",
+            "channel_name": "coursera",
+            "published_date": "2023-10-27T00:00:00Z",
+            "skill_path": "Health > Medicine > Anatomy > Systems Anatomy",
+            "level": "Beginner",
+            "type": "macro",
+            "content": "The course covers the detailed structures and functions of the cardiovascular, respiratory, and urinary systems. It includes lectures on Cardiovascular Anatomy I and II, Respiratory Anatomy, and Urinary Anatomy, utilizing videos, labeling activities, and quizzes.",
+            "topic": "anatomy_cardiovascular_respiratory_urinary",
+            "prerequisite_topics": [
+                "basic_biology",
+                "cell_biology"
+            ]
+        }
+    ]
+}
