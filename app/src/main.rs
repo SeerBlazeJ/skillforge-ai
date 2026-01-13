@@ -1,12 +1,9 @@
 use dioxus::prelude::*;
-
+mod server_functions;
 #[derive(Debug, Clone, Routable, PartialEq)]
-#[rustfmt::skip]
 enum Route {
-
     #[route("/")]
     Home {},
-
 }
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");

@@ -1,0 +1,30 @@
+[package]
+name = "frontend"
+version = "0.1.0"
+authors = ["Kaivan Mehta <kaivanmehta957@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
+anyhow = "1.0.100"
+fastembed = { version = "5.6.0", optional = true }
+reqwest = { version = "0.13.1", features = ["json"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+surrealdb = { version = "2.4.1", features = ["kv-rocksdb"], optional = true }
+tokio = { version = "1.49.0", optional = true }
+
+[features]
+default = ["web"]
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]
+server = [
+    "dioxus/server",
+    # "dep:axum",
+    "dep:fastembed",
+    "dep:surrealdb",
+    "dep:tokio",
+]

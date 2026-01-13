@@ -1,13 +1,19 @@
-use anyhow::{Context, Result};
-
-use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{fs::File, io::BufReader};
-use surrealdb::{
-    Surreal,
-    engine::local::{Db, RocksDb},
-};
 
+#[cfg(feature = "server")]
+use anyhow::{Context, Result};
+#[cfg(feature = "server")]
+use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+#[cfg(feature = "server")]
+use std::{fs::File, io::BufReader};
+#[cfg(feature = "server")]
+use surrealdb::{engine::local::RocksDb, Surreal};
+
+#[derive(Serialize, Deserialize)]
+struct Homedata {
+    data: String,
+}
 #[derive(Serialize, Deserialize)]
 struct CoursesData {
     title: String,
@@ -43,12 +49,15 @@ struct JsonDataCollection {
     data: Vec<JsonData>,
 }
 
+#[cfg(feature = "server")]
 const MODEL: EmbeddingModel = EmbeddingModel::ModernBertEmbedLarge;
+#[cfg(feature = "server")]
 const LOAD_AND_EMBED_JSON: bool = false; // NOTE: Will also delete all the previous info
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let db: Surreal<Db> = Surreal::new::<RocksDb>("skillforge")
+// #[tokio::main]
+#[server]
+async fn init_db() -> Result<()> {
+    let db = Surreal::new::<RocksDb>("skillforge")
         .await
         .context("Failed to connect to Database")?;
 
@@ -60,7 +69,7 @@ async fn main() -> Result<()> {
         .context("Couldn't connect to namespace and/or database")?;
 
     if LOAD_AND_EMBED_JSON {
-        db.query("DELETE courses;").await?; // Comment out if you do NOT want to clear the table while processing the new data.
+        // db.query("DELETE courses;").await?; // Comment out if you do NOT want to clear the table while processing the new data.
         let file = File::open("../final_data.json")
             .context("Failed to read file '../final_data.json' ")?;
         let reader = BufReader::new(file);
@@ -104,5 +113,13 @@ async fn main() -> Result<()> {
 
         println!("Data embedding and storage successfull");
     }
+
     Ok(())
+}
+
+#[server]
+async fn serve_home() -> Result<Homedata> {
+    Ok(Homedata {
+        data: "Hello, World".to_string(),
+    })
 }
