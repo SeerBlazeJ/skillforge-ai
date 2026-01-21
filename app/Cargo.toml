@@ -1,13 +1,11 @@
 [package]
-name = "frontend"
-version = "0.1.0"
+name = "SkillForge"
+version = "0.5.0"
 authors = ["Kaivan Mehta <kaivanmehta957@gmail.com>"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
+dioxus = { version = "0.7.3", features = ["router", "fullstack"] }
 anyhow = "1.0.100"
 fastembed = { version = "5.6.0", optional = true }
 reqwest = { version = "0.13.1", features = ["json"] }
@@ -15,6 +13,14 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 surrealdb = { version = "2.4.1", features = ["kv-rocksdb"], optional = true }
 tokio = { version = "1.49.0", optional = true }
+bcrypt = { version = "0.18.0", optional = true }
+uuid = { version = "1.11.0", features = ["v4", "serde", "js"] }
+chrono = { version = "0.4.38", features = ["serde"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+base64 = { version = "0.22.1", optional = true }
+rand = { version = "0.9.2", optional = true }
+web-sys = "0.3.85"
 
 [features]
 default = ["web"]
@@ -23,8 +29,10 @@ desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
 server = [
     "dioxus/server",
-    # "dep:axum",
     "dep:fastembed",
     "dep:surrealdb",
     "dep:tokio",
+    "dep:bcrypt",
+    "dep:base64",
+    "dep:rand",
 ]
