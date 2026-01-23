@@ -8,6 +8,8 @@ mod utils;
 
 use pages::*;
 
+pub const SESSION_DURATION_DAYS: i64 = 2;
+
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
 enum Route {

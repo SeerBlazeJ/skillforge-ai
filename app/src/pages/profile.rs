@@ -1,6 +1,7 @@
 use crate::{
     models::{User, UserPreferences},
     server_functions::{change_password, get_user_data, update_user_profile},
+    utils::get_session_token,
     Route,
 };
 use dioxus::prelude::*;
@@ -16,8 +17,21 @@ enum ProfileTab {
 #[component]
 pub fn Profile() -> Element {
     let mut active_tab = use_signal(|| ProfileTab::General);
-    let user_data =
-        use_resource(|| async move { get_user_data("user_id_placeholder".to_string()).await });
+    let session_token = match get_session_token() {
+        Some(token) => token,
+        None => {
+            return rsx! {
+                div {
+                    "Redirecting..."
+                    script { "window.location.href = '/login';" }
+                }
+            };
+        }
+    };
+    let user_data = use_resource(move || {
+        let session_token = session_token.clone();
+        async move { get_user_data(session_token).await }
+    });
 
     rsx! {
         div { class: "min-h-screen bg-gray-50",

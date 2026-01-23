@@ -112,7 +112,7 @@ struct QualityCheck {
 // --- Configuration ---
 const INPUT_DIR: &str = "../processed_datasets/*.json"; // Change this to your directory
 const OUTPUT_FILE: &str = "final_data.json";
-const MODEL: &str = "xiaomi/mimo-v2-flash:free";
+const MODEL: &str = "nvidia/nemotron-3-nano-30b-a3b:free";
 const MAX_CONCURRENT_REQUESTS: usize = 750; // Adjust based on rate limits
 
 #[tokio::main]

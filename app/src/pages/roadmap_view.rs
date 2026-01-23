@@ -49,7 +49,7 @@ pub fn RoadmapView(id: String) -> Element {
                             }
                         }
 
-                    // Sidebar
+            // Sidebar
 
 
                         div { class: "w-96 bg-gray-50 border-l border-gray-200 overflow-y-auto",
@@ -134,7 +134,7 @@ fn RoadmapSVG(
                     marker_units: "strokeWidth",
                     path { d: "M0,0 L0,6 L9,3 z", fill: "#d1d5db" }
                 }
-
+            
             }
 
             // Draw nodes
@@ -150,13 +150,13 @@ fn RoadmapSVG(
                             cursor: "pointer",
                             onclick: move |_| selected_node.set(Some(node_clone.clone())),
 
-                        // Node background
+                // Node background
 
-                        // Node title
+                // Node title
 
-                        // Resource count
+                // Resource count
 
-                        // Completion checkbox
+                // Completion checkbox
 
 
 

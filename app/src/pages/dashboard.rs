@@ -1,10 +1,25 @@
+use crate::utils::get_session_token;
 use crate::{models::Roadmap, server_functions::get_user_roadmaps, Route};
 use dioxus::prelude::*;
 
 #[component]
 pub fn Dashboard() -> Element {
-    let roadmaps =
-        use_resource(|| async move { get_user_roadmaps("user_id_from_session".to_string()).await });
+    let session_token = match get_session_token() {
+        Some(token) => token,
+        None => {
+            return rsx! {
+                div { class: "min-h-screen flex items-center justify-center",
+                    p { "Redirecting to login..." }
+                    script { "window.location.href = '/login';" }
+                }
+            };
+        }
+    };
+    eprintln!("Session token recieved: {}", &session_token);
+    let roadmaps = use_resource(move || {
+        let session_token = session_token.clone();
+        async move { get_user_roadmaps(session_token).await }
+    });
 
     rsx! {
         div { class: "min-h-screen bg-gray-50",

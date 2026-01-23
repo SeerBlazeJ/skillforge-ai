@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 
 #[cfg(feature = "server")]
-use surrealdb::{engine::local::RocksDb, Surreal};
+use surrealdb::{engine::local::RocksDb, RecordId, Surreal};
 
 #[cfg(feature = "server")]
 use bcrypt::{hash, verify, DEFAULT_COST};
@@ -25,6 +25,7 @@ use base64::{engine::general_purpose, Engine as _};
 use rand::Rng;
 
 use crate::models::*;
+use crate::SESSION_DURATION_DAYS;
 
 #[cfg(feature = "server")]
 const MODEL: EmbeddingModel = EmbeddingModel::ModernBertEmbedLarge;
@@ -44,7 +45,7 @@ impl<T, E: std::fmt::Display> IntoServerError<T> for Result<T, E> {
         self.map_err(|e| ServerFnError::new(e.to_string()))
     }
 }
-const SESSION_DURATION_DAYS: i64 = 2;
+
 // const SESSION_COOKIE_NAME: &str = "skillforge_session";
 
 #[cfg(feature = "server")]
@@ -57,7 +58,7 @@ async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
 
             db.use_ns("main").use_db("main").await?;
 
-            db.query("DEFINE TABLE users SCHEMAFULL;").await?;
+            db.query("DEFINE TABLE users;").await?;
             db.query("DEFINE FIELD username ON users TYPE string;")
                 .await?;
             db.query("DEFINE FIELD password_hash ON users TYPE string;")
@@ -66,7 +67,7 @@ async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
             db.query("DEFINE INDEX unique_username ON users FIELDS username UNIQUE;")
                 .await?;
 
-            db.query("DEFINE TABLE roadmaps SCHEMAFULL;").await?;
+            db.query("DEFINE TABLE roadmaps;").await?;
             db.query("DEFINE FIELD user_id ON roadmaps TYPE string;")
                 .await?;
             db.query("DEFINE FIELD skill_name ON roadmaps TYPE string;")
@@ -117,21 +118,29 @@ async fn get_user_from_session(session_token: String) -> Result<Option<User>, Se
     let db = get_db().await.into_server_error()?;
 
     let mut result = db
-        .query("SELECT * FROM sessions WHERE session_token = $token AND expires_at > $now")
-        .bind(("token", session_token))
-        .bind(("now", Utc::now()))
+        .query("SELECT * FROM sessions WHERE session_token = $session_token") // Removed expires check for debugging
+        .bind(("session_token", session_token))
         .await
         .into_server_error()?;
 
     let sessions: Vec<Session> = result.take(0).into_server_error()?;
 
     if let Some(session) = sessions.first() {
-        let user: Option<User> = db
-            .select(("users", session.user_id.clone()))
+        if session.expires_at < Utc::now() {
+            return Ok(None);
+        }
+        let user_id: RecordId = session
+            .user_id
+            .parse()
+            .ok()
+            .ok_or(ServerFnError::new("Could not parse user ID"))?;
+        let user: UserDB = db
+            .select(user_id)
             .await
-            .into_server_error()?;
-
-        Ok(user)
+            .into_server_error()?
+            .ok_or(ServerFnError::new("User not found"))?;
+        let user = User::from(user);
+        Ok(Some(user))
     } else {
         Ok(None)
     }
@@ -142,8 +151,8 @@ async fn delete_session(session_token: String) -> Result<(), ServerFnError> {
     let db = get_db().await.into_server_error()?;
 
     let mut result = db
-        .query("DELETE sessions WHERE session_token = $token")
-        .bind(("token", session_token))
+        .query("DELETE sessions WHERE session_token = $session_token")
+        .bind(("session_token", session_token))
         .await
         .into_server_error()?;
 
@@ -168,7 +177,7 @@ pub async fn signup_user(
         username: username.clone(),
         password_hash,
         name,
-        skills_learned: vec![],
+        skills_learned: Vec::new(),
         preferences: UserPreferences::default(),
         created_at: Utc::now(),
     });
@@ -192,24 +201,26 @@ pub async fn signup_user(
 #[server]
 pub async fn login_user(username: String, password: String) -> Result<String, ServerFnError> {
     let db = get_db().await?;
-
-    let mut result = db
-        .query("SELECT * FROM users WHERE username = $username")
+    eprintln!("Found request for {}", &username);
+    let users: Vec<UserDB> = db
+        .query("SELECT * FROM users where username = $username;")
         .bind(("username", username.clone()))
         .await
+        .into_server_error()?
+        .take(0)
         .into_server_error()?;
-
-    let users: Vec<User> = result.take(0).into_server_error()?;
-
     if let Some(user) = users.first() {
         if verify(password.as_bytes(), &user.password_hash).into_server_error()? {
+            let user = User::from(user.to_owned());
             let user_id = user
                 .id
                 .clone()
-                .ok_or(ServerFnError::new("User has noi ID"))?;
+                .ok_or(ServerFnError::new("User has no ID"))?;
             let session_token = create_session(user_id).await?;
             return Ok(session_token);
         }
+    } else {
+        eprintln!("Record not found");
     }
 
     Err(ServerFnError::new("Invalid credentials"))
@@ -226,14 +237,22 @@ pub async fn get_user_data(session_token: String) -> Result<User, ServerFnError>
 
 #[server]
 pub async fn update_user_profile(
-    session_token: String,
+    user_id: String,
     name: Option<String>,
     skills_learned: Option<Vec<String>>,
     preferences: Option<UserPreferences>,
 ) -> Result<(), ServerFnError> {
     let db = get_db().await?;
-
-    let mut user: User = get_user_data(session_token).await?;
+    let user_id: RecordId = user_id
+        .parse()
+        .ok()
+        .ok_or(ServerFnError::new("Could not parse user ID"))?;
+    let mut user: User = db
+        .select(user_id)
+        .await
+        .into_server_error()?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+    // let mut user: User = get_user_data(session_token).await?;
 
     if let Some(name) = name {
         user.name = name;
@@ -256,17 +275,25 @@ pub async fn update_user_profile(
 
 #[server]
 pub async fn change_password(
-    session_token: String,
+    user_id: String,
     old_password: String,
     new_password: String,
 ) -> Result<(), ServerFnError> {
     let db = get_db().await?;
-
-    let mut user = get_user_data(session_token).await?;
-    let user_id = user
-        .id
-        .clone()
-        .ok_or(ServerFnError::new("User ID not found"))?;
+    let user_id: RecordId = user_id
+        .parse()
+        .ok()
+        .ok_or(ServerFnError::new("Could not parse user ID"))?;
+    let mut user: UserDB = db
+        .select(user_id.clone())
+        .await
+        .into_server_error()?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+    // let mut user = get_user_data(session_token).await?;
+    // let user_id = user
+    //     .id
+    //     .clone()
+    //     .ok_or(ServerFnError::new("User ID not found"))?;
 
     if !verify(old_password.as_bytes(), &user.password_hash).into_server_error()? {
         return Err(ServerFnError::new("Invalid old password"));
@@ -274,11 +301,7 @@ pub async fn change_password(
 
     user.password_hash = hash(new_password.as_bytes(), DEFAULT_COST).into_server_error()?;
 
-    let _: Option<User> = db
-        .update(("users", user_id))
-        .content(user)
-        .await
-        .into_server_error()?;
+    let _: Option<User> = db.update(user_id).content(user).await.into_server_error()?;
 
     Ok(())
 }

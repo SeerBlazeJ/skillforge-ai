@@ -1,3 +1,4 @@
+use crate::utils::get_session_token;
 use crate::{
     models::{Question, QuestionResponse, QuestionType},
     server_functions::{generate_questions, generate_roadmap},
@@ -22,16 +23,28 @@ pub fn CreateRoadmap() -> Element {
     let mut responses = use_signal(Vec::<QuestionResponse>::new);
     let mut current_answer = use_signal(Vec::<String>::new);
     let mut error = use_signal(|| None::<String>);
+    let session_token_for_roadmap = match get_session_token() {
+        Some(token) => token,
+        None => {
+            return rsx! {
+                div {
+                    "Redirecting..."
+                    script { "window.location.href = '/login';" }
+                }
+            };
+        }
+    };
+    let session_token_for_questions = session_token_for_roadmap.clone();
+
     let load_questions = move |_| {
         let skill = skill_name();
+        let session_token = session_token_for_questions.clone();
         if skill.trim().is_empty() {
             error.set(Some("Please enter a skill name".to_string()));
             return;
         }
-
         spawn(async move {
-            // TODO: Get user_id from session
-            match generate_questions(skill.clone(), "user_id_placeholder".to_string()).await {
+            match generate_questions(skill.clone(), session_token).await {
                 Ok(qs) => {
                     questions.set(qs);
                     current_question_idx.set(0);
@@ -71,10 +84,9 @@ pub fn CreateRoadmap() -> Element {
             step.set(FlowStep::Generating);
             let skill = skill_name();
 
+            let session_token = session_token_for_roadmap.clone();
             spawn(async move {
-                match generate_roadmap(skill, "user_id_placeholder".to_string(), all_responses)
-                    .await
-                {
+                match generate_roadmap(skill, session_token, all_responses).await {
                     Ok(roadmap_id) => {
                         step.set(FlowStep::Complete(roadmap_id));
                     }

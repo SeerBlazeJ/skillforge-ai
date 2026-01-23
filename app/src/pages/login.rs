@@ -1,3 +1,5 @@
+use crate::utils::*;
+use crate::SESSION_DURATION_DAYS;
 use crate::{server_functions::login_user, Route};
 use dioxus::prelude::*;
 
@@ -7,12 +9,21 @@ pub fn Login() -> Element {
     let mut password = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let nav = navigator();
-
-    let on_submit = move |_| {
+    let on_submit = move |evt: FormEvent| {
+        evt.prevent_default();
+        let u = username().trim().to_string();
+        let p = password().to_string();
         spawn(async move {
-            match login_user(username(), password()).await {
-                Ok(_) => {
-                    nav.push(Route::Dashboard {});
+            match login_user(u, p).await {
+                Ok(token) => {
+                    set_session_cookie(&token, SESSION_DURATION_DAYS);
+                    if get_session_token().is_some() {
+                        nav.push(Route::Dashboard {});
+                    } else {
+                        error.set(Some(
+                            "Failed to save session. Please try again.".to_string(),
+                        ));
+                    }
                 }
                 Err(e) => {
                     error.set(Some(format!("Login failed: {}", e)));

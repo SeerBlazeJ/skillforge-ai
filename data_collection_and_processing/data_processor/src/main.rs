@@ -73,7 +73,7 @@ struct Message {
     content: String,
 }
 
-const MODEL: &str = "xiaomi/mimo-v2-flash:free";
+const MODEL: &str = "nvidia/nemotron-3-nano-30b-a3b:free";
 const MAX_CONCURRENT_REQUESTS: usize = 250; // Adjust based on rate limits
 
 #[tokio::main]

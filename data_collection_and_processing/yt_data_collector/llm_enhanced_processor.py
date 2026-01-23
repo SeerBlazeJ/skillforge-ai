@@ -20,7 +20,7 @@ class LLMConfig:
     models = {
         "fast": "nvidia/nemotron-3-nano-30b-a3b:free",  # Fast for simple tasks
         "balanced": "mistralai/devstral-2512:free",  # Good balance
-        "smart": "xiaomi/mimo-v2-flash:free",  # Good reasoning
+        "smart": "nvidia/nemotron-3-nano-30b-a3b:free",  # Good reasoning
         "vision": "mistralai/pixtral-12b:free",  # For visual content
         "long_context": "google/gemini-pro-1.5:free"  # 1M tokens
     }

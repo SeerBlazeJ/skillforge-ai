@@ -11,7 +11,9 @@ pub struct User {
     pub username: String,
     pub password_hash: String,
     pub name: String,
+    #[serde(default)]
     pub skills_learned: Vec<String>,
+    #[serde(default)]
     pub preferences: UserPreferences,
     pub created_at: DateTime<Utc>,
 }
@@ -73,9 +75,11 @@ pub struct SessionInfo {
     pub name: String,
 }
 
+//TODO : Make this compatible with database RecordId. note: no need to make a whole new struct as we are not sending it to the frontend
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
-    pub id: Option<String>,
+    pub id: Option<RecordId>,
     pub user_id: String,
     pub session_token: String,
     pub created_at: DateTime<Utc>,
