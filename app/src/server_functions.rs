@@ -1,7 +1,7 @@
-use dioxus::prelude::*;
-
 #[cfg(feature = "server")]
 use anyhow::{Context, Result};
+use dioxus::prelude::*;
+use std::{env, fs::File, io::BufReader};
 
 #[cfg(feature = "server")]
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
@@ -25,7 +25,7 @@ use base64::{engine::general_purpose, Engine as _};
 use rand::Rng;
 
 use crate::models::*;
-use crate::SESSION_DURATION_DAYS;
+use crate::{LOAD_AND_EMBED_JSON, SESSION_DURATION_DAYS};
 
 #[cfg(feature = "server")]
 const MODEL: EmbeddingModel = EmbeddingModel::ModernBertEmbedLarge;
@@ -67,12 +67,69 @@ async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
             db.query("DEFINE INDEX unique_username ON users FIELDS username UNIQUE;")
                 .await?;
 
+            db.query("DEFINE TABLE sessions;").await?;
+            db.query("DEFINE FIELD user_id ON sessions TYPE string;")
+                .await?;
+            db.query("DEFINE FIELD session_token ON sessions TYPE string;")
+                .await?;
+            db.query("DEFINE FIELD created_at ON sessions TYPE string;")
+                .await?;
+            db.query("DEFINE FIELD expires_at ON sessions TYPE string;")
+                .await?;
+            db.query("DEFINE INDEX unique_session_token ON sessions FIELDS session_token UNIQUE;")
+                .await?;
+
             db.query("DEFINE TABLE roadmaps;").await?;
             db.query("DEFINE FIELD user_id ON roadmaps TYPE string;")
                 .await?;
             db.query("DEFINE FIELD skill_name ON roadmaps TYPE string;")
                 .await?;
 
+    if LOAD_AND_EMBED_JSON {
+                let file = File::open("../final_data.json")
+            .context("Failed to read file '../final_data.json' ")?;
+        let reader = BufReader::new(file);
+        let collection: JsonDataCollection =
+            serde_json::from_reader(reader).context("Couldn't parse data properly")?;
+        let mut model = TextEmbedding::try_new(InitOptions::new(MODEL))?;
+        let data_len = collection.data.len();
+        for (i, data) in collection.data.into_iter().enumerate() {
+            println!("Processing and storing: {i} / {data_len}");
+            let str_to_embed = format!(
+                "Title: {}, topic: {}, description: {}, content: {}, Skill Path: {}, Prerequisites: {}, level: {}, Topic Size : {}",
+                data.title,
+                data.topic,
+                data.description,
+                data.content,
+                data.skill_path,
+                data.prerequisite_topics.join(", "),
+                data.level,
+                data.ctype
+            );
+            let embedding = model.embed(vec![str_to_embed], None)?;
+            let data_to_insert = CoursesDataWithEmbeddings {
+                id: None,
+                title: data.title.clone(),
+                description: data.description,
+                topic: data.topic,
+                prerequisite_topics: data.prerequisite_topics,
+                channel_name: data.channel_name,
+                published_date: data.published_date,
+                skill_path: data.skill_path,
+                level: data.level,
+                ctype: data.ctype,
+                content: data.content,
+                embedding,
+            };
+            let res: Option<CoursesDataWithEmbeddings> = db.create("courses").content(data_to_insert).await?;
+            match res {
+                Some(_) => {}
+                None => println!("Failed creating entry for {}", data.title),
+            }
+        }
+
+        println!("Data embedding and storage successfull");
+    }
             Ok(db)
         })
         .await
@@ -342,7 +399,6 @@ pub async fn generate_questions(
     session_token: String,
 ) -> Result<Vec<Question>, ServerFnError> {
     let user: User = get_user_data(session_token).await?;
-
     let prompt = format!(
         "Generate 8 questions to evaluate a user's learning preferences and existing knowledge for learning {}. \n\
         User's existing skills: {:?}\n\
@@ -357,7 +413,6 @@ pub async fn generate_questions(
     );
 
     let questions = call_openrouter_for_questions(&prompt).await?;
-
     Ok(questions)
 }
 
@@ -374,13 +429,15 @@ pub async fn generate_roadmap(
         .clone()
         .ok_or(ServerFnError::new("User ID not found"))?;
 
-    let query_variations = generate_rag_queries(&skill_name, &user, &responses);
-
+    let query_variations = generate_rag_queries(&skill_name, &user, &responses)
+        .await
+        .into_server_error()?;
+    dbg!(&query_variations);
     let relevant_resources = search_vector_db_multi_query(&query_variations).await?;
-
+    dbg!(&relevant_resources);
     let roadmap_nodes =
         generate_roadmap_with_llm(&skill_name, &user, &responses, &relevant_resources).await?;
-
+    eprintln!("=============== nodes generated ===========");
     let roadmap = Roadmap {
         id: None,
         user_id: user_id.clone(),
@@ -396,7 +453,7 @@ pub async fn generate_roadmap(
         .await
         .into_server_error()?
         .ok_or(ServerFnError::ServerError {
-            message: "Couldn't create entry".to_string(),
+            message: "Couldn't create database entry for the roadmap".to_string(),
             code: 500,
             details: None,
         })?;
@@ -405,44 +462,61 @@ pub async fn generate_roadmap(
 }
 
 #[cfg(feature = "server")]
-#[allow(unused)]
-fn generate_rag_queries(
+async fn generate_rag_queries(
     skill_name: &str,
     user: &User,
     responses: &[QuestionResponse],
-) -> Vec<String> {
-    let base_queries = vec![
-        format!("Learn {} fundamentals", skill_name),
-        format!("{} beginner tutorial", skill_name),
-        format!("{} step by step guide", skill_name),
-        format!("Best resources to learn {}", skill_name),
-        format!("{} prerequisites and basics", skill_name),
-    ];
+) -> Result<Vec<String>> {
+    let client = reqwest::Client::new();
+    let api_key = env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
 
-    let mut queries = base_queries;
+    let sys_prompt: &str = "You are an itermediate bot between an AI agent that is used to generate roadmap for users to learn a sepcific skill and an RAG system that contains information on various courses and macro and details on skilltype (whether it is a macro skill or micro skill).
+    The RAG stores the embddings in the given fields and format to store maximum context, and you are to create RAG querries accordingly:
+    Title: {title of the skill/course}, topic: {parent/main_topic}, description: {description of the course or skill}, content: {what content is in it}, Skill Path: {main skill > sub_skill > topic ... OR just skillname}, Prerequisites: {what the user needs to know before learning this}, level: {Beginner OR Intermediate OR Advanced}, Topic Size : {macro OR micro}
+    You are to generate 5 RAG querries (to get maximum context) based on the user preferences and details you recieve from the app, along with the name of the skill that the user wants to learn, and user's responses on questions asked by the app to evaluate how the user wants to learn and how much the user already knows (Give this more importance than user preferences in case of conflict of interests). Return ONLY the querries and strictly in the format of a JSON array";
 
-    if !user.skills_learned.is_empty() {
-        queries.push(format!(
-            "{} for developers with {} background",
-            skill_name,
-            user.skills_learned.join(", ")
-        ));
-    }
+    let user_prompt: String = format!(
+        "
+        User Details:
+        Skills: {:?},
+        Preferences: {:?}
 
-    if user.preferences.difficulty_preference == "intermediate" {
-        queries.push(format!("{} intermediate concepts", skill_name));
-    }
+        Skill to learn: {skill_name}
 
-    for content_type in &user.preferences.preferred_content_types {
-        queries.push(format!("{} {} tutorial", skill_name, content_type));
-    }
+        User Resposes to questions asked for context: {:?}
+        ",
+        user.skills_learned, user.preferences, responses
+    );
+    let body = serde_json::json!({
+        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "messages": [
+            {
+                "role": "system",
+                "content": sys_prompt,
+                "role": "user",
+                "content": user_prompt
+            }
+        ],
+        "response_format": { "type": "json_object" }
+    });
+    let response = client
+        .post("https://openrouter.ai/api/v1/chat/completions")
+        .header("Authorization", format!("Bearer {api_key}"))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await?;
 
-    queries.truncate(30);
-    queries
+    let json: serde_json::Value = response.json().await?;
+    let content = json["choices"][0]["message"]["content"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No response content"))?;
+    let queries: Vec<String> = serde_json::from_str(content)?;
+    Ok(queries)
 }
 
 #[cfg(feature = "server")]
-async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesData>> {
+async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesDataClean>> {
     let db = get_db().await?;
     let mut model = TextEmbedding::try_new(InitOptions::new(MODEL))?;
 
@@ -456,8 +530,7 @@ async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesD
             .bind(("embedding", embedding))
             .await?;
 
-        let courses: Vec<CoursesData> = result.take(0)?;
-
+        let courses: Vec<CoursesDataWithEmbeddings> = result.take(0)?;
         for course in courses {
             if let Some(id) = &course.id {
                 all_results.insert(id.clone(), course);
@@ -465,7 +538,10 @@ async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesD
         }
     }
 
-    let mut results: Vec<CoursesData> = all_results.into_values().collect();
+    let mut results: Vec<CoursesDataClean> = all_results
+        .into_values()
+        .map(CoursesDataClean::from)
+        .collect();
     results.truncate(20);
 
     Ok(results)
@@ -476,50 +552,100 @@ async fn generate_roadmap_with_llm(
     skill_name: &str,
     user: &User,
     responses: &[QuestionResponse],
-    resources: &[CoursesData],
+    resources: &[CoursesDataClean],
 ) -> Result<Vec<RoadmapNode>> {
     let resources_json = serde_json::to_string_pretty(resources)?;
-
+    // inside generate_roadmap_with_llm(...)
     let prompt = format!(
-        "Create a detailed learning roadmap for '{}'. \n\n\
-        User Profile:\n\
-        - Existing skills: {:?}\n\
-        - Learning preferences: {:?}\n\
-        - Question responses: {:?}\n\n\
-        Available Resources:\n\
-        {}\n\n\
-        Generate a roadmap with 8-12 nodes. Each node should have:\n\
-        - skill_name: specific skill/topic to learn\n\
-        - description: brief explanation (1-2 sentences)\n\
-        - resources: array of relevant resources from the provided data (match by topic/skill)\n\
-        - prerequisites: array of skill IDs that must be completed first\n\
-        - position: {{x, y}} coordinates for visualization (arrange logically)\n\n\
-        Return ONLY valid JSON array of nodes. Ensure resources are matched accurately from the provided data.",
-        skill_name,
-        user.skills_learned,
-        user.preferences,
-        responses,
-        resources_json
+    "Create a detailed learning roadmap for '{}'.\n\n\
+    User Profile:\n\
+    - Existing skills: {:?}\n\
+    - Learning preferences: {:?}\n\
+    - Question responses: {:?}\n\n\
+    Available Resources:\n\
+    {}\n\n\
+    OUTPUT FORMAT (STRICT):\n\
+    Return ONLY valid JSON in this exact shape:\n\
+    {{\"nodes\": [ ... ]}}\n\
+    - Do NOT return a top-level array.\n\
+    - Do NOT wrap in markdown code fences.\n\
+    - Do NOT include any text outside JSON.\n\n\
+    Each node must match:\n\
+    {{\n\
+      \"skill_name\": \"...\",\n\
+      \"description\": \"...\",\n\
+      \"resources\": [{{\"title\":\"...\",\"platform\":\"...\",\"url\":null,\"resource_type\":\"...\"}}],\n\
+      \"prerequisites\": [\"...\"],\n\
+      \"is_completed\": false,\n\
+      \"position\": {{\"x\": 0, \"y\": 0}}\n\
+    }}",
+    skill_name,
+    user.skills_learned,
+    user.preferences,
+    responses,
+    resources_json
     );
 
-    let nodes_json = call_openrouter_for_roadmap(&prompt).await?;
-    let mut nodes: Vec<RoadmapNode> = serde_json::from_str(&nodes_json)?;
+    #[derive(serde::Deserialize)]
+    struct RoadmapNodesOut {
+        nodes: Vec<RoadmapNode>,
+    }
 
-    for node in &mut nodes {
+    let mut nodes_json: RoadmapNodesOut =
+        serde_json::from_str(&call_openrouter_for_roadmap(&prompt).await?).into_server_error()?;
+
+    for node in &mut nodes_json.nodes {
         node.id = Uuid::new_v4().to_string();
         node.is_completed = false;
     }
 
-    Ok(nodes)
+    Ok(nodes_json.nodes)
 }
 
 #[cfg(feature = "server")]
 async fn call_openrouter_for_questions(prompt: &str) -> Result<Vec<Question>> {
     let client = reqwest::Client::new();
-
+    let api_key = env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
+    let sys_prompt = "You are an educational assessment expert that generates personalized learning evaluation questions. \
+        Your goal is to understand both HOW the user prefers to learn and WHAT they already know.\n\n\
+        RESPONSE FORMAT RULES:\n\
+        - Return ONLY valid JSON in this exact structure: {\"questions\": [...]}\n\
+        - Never add explanatory text before or after the JSON\n\
+        - Never use markdown code blocks\n\n\
+        QUESTION QUALITY GUIDELINES:\n\
+        1. Preference Questions (5 questions):\n\
+           - Ask about learning style (visual/text/hands-on/video)\n\
+           - Ask about time commitment and pacing preferences\n\
+           - Ask about content depth preferences (deep-dive vs overview)\n\
+           - Ask about preferred resource types (courses/books/projects/docs)\n\
+           - Ask about learning goals (career/hobby/certification)\n\
+        2. Knowledge Questions (3 questions):\n\
+           - Assess prerequisite knowledge relevant to the skill\n\
+           - Test understanding of fundamental concepts\n\
+           - Gauge experience level accurately\n\n\
+        QUESTION TYPES:\n\
+        - MCQ: Single correct answer (4 options)\n\
+        - MSQ: Multiple correct answers (4-5 options)\n\
+        - TrueFalse: Binary choice (2 options: 'True', 'False')\n\
+        - OneWord: Short text answer (empty options array)\n\n\
+        OUTPUT SCHEMA:\n\
+        {\n\
+          \"questions\": [\n\
+            {\n\
+              \"question_text\": \"Clear, concise question\",\n\
+              \"question_type\": \"MCQ\" | \"MSQ\" | \"TrueFalse\" | \"OneWord\",\n\
+              \"options\": [\"Option 1\", \"Option 2\", \"Option 3\", \"Option 4\"]\n\
+            }\n\
+          ]\n\
+        }\n\n\
+        Make questions conversational, relevant to the specific skill, and ensure options are realistic and well-balanced.c";
     let body = serde_json::json!({
-        "model": "google/gemini-2.0-flash-exp:free",
+        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
         "messages": [
+            {
+               "role": "system",
+                "content": sys_prompt
+            },
             {
                 "role": "user",
                 "content": prompt
@@ -530,7 +656,7 @@ async fn call_openrouter_for_questions(prompt: &str) -> Result<Vec<Question>> {
 
     let response = client
         .post("https://openrouter.ai/api/v1/chat/completions")
-        .header("Authorization", "Bearer YOUR_API_KEY")
+        .header("Authorization", format!("Bearer {api_key}"))
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -540,7 +666,6 @@ async fn call_openrouter_for_questions(prompt: &str) -> Result<Vec<Question>> {
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No response content"))?;
-
     let parsed: serde_json::Value = serde_json::from_str(content)?;
     let questions_array = parsed["questions"]
         .as_array()
@@ -575,10 +700,17 @@ async fn call_openrouter_for_questions(prompt: &str) -> Result<Vec<Question>> {
 #[cfg(feature = "server")]
 async fn call_openrouter_for_roadmap(prompt: &str) -> Result<String> {
     let client = reqwest::Client::new();
+    let api_key = env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
+    let system_prompt = "You are a JSON-only API. Return ONLY valid JSON with top-level object \
+{\"nodes\": [...]} and nothing else. No markdown. No commentary.";
 
     let body = serde_json::json!({
-        "model": "google/gemini-2.0-flash-exp:free",
+        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
         "messages": [
+            {
+                "role": "system",
+                "content": system_prompt
+            },
             {
                 "role": "user",
                 "content": prompt
@@ -588,16 +720,14 @@ async fn call_openrouter_for_roadmap(prompt: &str) -> Result<String> {
 
     let response = client
         .post("https://openrouter.ai/api/v1/chat/completions")
-        .header(
-            "Authorization",
-            "Bearer  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",
-        )
+        .header("Authorization", format!("Bearer {api_key}"))
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
         .await?;
 
     let json: serde_json::Value = response.json().await?;
+    dbg!(&json);
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No response content"))?;

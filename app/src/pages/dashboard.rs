@@ -4,18 +4,15 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Dashboard() -> Element {
-    let session_token = match get_session_token() {
-        Some(token) => token,
-        None => {
-            return rsx! {
-                div { class: "min-h-screen flex items-center justify-center",
-                    p { "Redirecting to login..." }
-                    script { "window.location.href = '/login';" }
-                }
-            };
-        }
-    };
-    eprintln!("Session token recieved: {}", &session_token);
+    let nav = navigator();
+    let token = get_session_token();
+    if token.is_none() {
+        nav.push(Route::Login {});
+        return rsx! { "Redirecting..." };
+    }
+
+    let session_token = token.unwrap();
+
     let roadmaps = use_resource(move || {
         let session_token = session_token.clone();
         async move { get_user_roadmaps(session_token).await }

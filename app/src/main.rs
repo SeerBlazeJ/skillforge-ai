@@ -8,6 +8,7 @@ mod utils;
 
 use pages::*;
 
+pub const LOAD_AND_EMBED_JSON: bool = false;
 pub const SESSION_DURATION_DAYS: i64 = 2;
 
 #[derive(Debug, Clone, Routable, PartialEq)]

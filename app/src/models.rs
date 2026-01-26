@@ -1,5 +1,3 @@
-// use std::str::FromStr;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
@@ -75,7 +73,6 @@ pub struct SessionInfo {
     pub name: String,
 }
 
-//TODO : Make this compatible with database RecordId. note: no need to make a whole new struct as we are not sending it to the frontend
 #[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -122,7 +119,7 @@ pub struct LearningResource {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CoursesData {
+pub struct CoursesDataWithEmbeddings {
     pub id: Option<String>,
     pub title: String,
     pub description: String,
@@ -135,6 +132,38 @@ pub struct CoursesData {
     pub topic: String,
     pub prerequisite_topics: Vec<String>,
     pub embedding: Vec<Vec<f32>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct CoursesDataClean {
+    pub title: String,
+    pub description: String,
+    pub channel_name: String,
+    pub published_date: String,
+    pub skill_path: String,
+    pub level: String,
+    pub ctype: String,
+    pub content: String,
+    pub topic: String,
+    pub prerequisite_topics: Vec<String>,
+}
+
+impl From<CoursesDataWithEmbeddings> for CoursesDataClean {
+    fn from(value: CoursesDataWithEmbeddings) -> Self {
+        CoursesDataClean {
+            title: value.title,
+            description: value.description,
+            channel_name: value.channel_name,
+            published_date: value.published_date,
+            skill_path: value.skill_path,
+            level: value.level,
+            ctype: value.ctype,
+            content: value.content,
+            topic: value.topic,
+            prerequisite_topics: value.prerequisite_topics,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)] // Added PartialEq
@@ -163,4 +192,24 @@ pub struct QuestionResponse {
 pub struct RoadmapRequest {
     pub skill_name: String,
     pub user_responses: Vec<QuestionResponse>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct JsonData {
+    pub title: String,
+    pub description: String,
+    pub channel_name: String,
+    pub published_date: String,
+    pub skill_path: String,
+    pub level: String,
+    #[serde(rename = "type")]
+    pub ctype: String,
+    pub content: String,
+    pub topic: String,
+    pub prerequisite_topics: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct JsonDataCollection {
+    pub data: Vec<JsonData>,
 }

@@ -17,17 +17,14 @@ enum ProfileTab {
 #[component]
 pub fn Profile() -> Element {
     let mut active_tab = use_signal(|| ProfileTab::General);
-    let session_token = match get_session_token() {
-        Some(token) => token,
-        None => {
-            return rsx! {
-                div {
-                    "Redirecting..."
-                    script { "window.location.href = '/login';" }
-                }
-            };
-        }
-    };
+    let nav = navigator();
+    let token = get_session_token();
+    if token.is_none() {
+        nav.push(Route::Login {});
+        return rsx! { "Redirecting..." };
+    }
+
+    let session_token = token.unwrap();
     let user_data = use_resource(move || {
         let session_token = session_token.clone();
         async move { get_user_data(session_token).await }

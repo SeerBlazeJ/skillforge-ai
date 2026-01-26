@@ -8,3 +8,5 @@ Cargo.lock
 **/*.rs.bk
 /skillforge
 skillforgeDB backup - courses table with embeddings.7z
+/static
+/.fastembed_cache
