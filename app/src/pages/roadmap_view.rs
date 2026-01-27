@@ -8,7 +8,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn RoadmapView(id: String) -> Element {
     let id_clone = id.clone(); // Clone for use in sidebar
-    let roadmap = use_resource(move || {
+    let roadmap: Resource<std::result::Result<Roadmap, ServerFnError>> = use_resource(move || {
         let id = id.clone();
         async move { get_roadmap(id).await }
     });
@@ -46,18 +46,20 @@ pub fn RoadmapView(id: String) -> Element {
                                 selected_node,
                                 view_box,
                                 roadmap_id: id_clone.clone(),
+                                roadmap_resource: roadmap,
+
                             }
                         }
 
-            // Sidebar
-
+                        // Sidebar
 
                         div { class: "w-96 bg-gray-50 border-l border-gray-200 overflow-y-auto",
                             if let Some(node) = selected_node() {
                                 NodeDetailSidebar {
                                     node,
-                                    roadmap_id: id_clone.clone(), // Use id_clone
+                                    roadmap_id: id_clone.clone(), // Use id_clone // Use id_clone // Use id_clone  Use id_clone // Use id_clone  Use id_clone  Use id_clone  Use id_clone // Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone // Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone // Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone // Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone // Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone  Use id_clone
                                     on_close: move |_| selected_node.set(None),
+                                    roadmap,
                                 }
                             } else {
                                 RoadmapOverview { roadmap: roadmap_data.clone() }
@@ -86,6 +88,7 @@ fn RoadmapSVG(
     selected_node: Signal<Option<RoadmapNode>>,
     view_box: Signal<(i32, i32, i32, i32)>,
     roadmap_id: String,
+    roadmap_resource: Resource<std::result::Result<Roadmap, ServerFnError>>,
 ) -> Element {
     let (vb_x, vb_y, vb_width, vb_height) = view_box();
 
@@ -134,7 +137,7 @@ fn RoadmapSVG(
                     marker_units: "strokeWidth",
                     path { d: "M0,0 L0,6 L9,3 z", fill: "#d1d5db" }
                 }
-            
+
             }
 
             // Draw nodes
@@ -150,18 +153,13 @@ fn RoadmapSVG(
                             cursor: "pointer",
                             onclick: move |_| selected_node.set(Some(node_clone.clone())),
 
-                // Node background
+                            // Node background
 
-                // Node title
+                            // Node title
 
-                // Resource count
+                            // Resource count
 
-                // Completion checkbox
-
-
-
-
-
+                            // Completion checkbox
 
                             rect {
                                 width: "200",
@@ -209,11 +207,11 @@ fn RoadmapSVG(
                                                 let node_id = node_id.clone();
                                                 async move {
                                                     let _ = toggle_node_completion(roadmap_id, node_id).await;
+                                                    roadmap_resource.restart();
                                                 }
                                             });
                                         },
                                     }
-
 
                                     if node.is_completed {
                                         path {
@@ -244,7 +242,12 @@ fn truncate_text(text: &str, max_len: usize) -> String {
 }
 
 #[component]
-fn NodeDetailSidebar(node: RoadmapNode, roadmap_id: String, on_close: EventHandler<()>) -> Element {
+fn NodeDetailSidebar(
+    node: RoadmapNode,
+    roadmap_id: String,
+    on_close: EventHandler<()>,
+    roadmap: Resource<std::result::Result<Roadmap, ServerFnError>>,
+) -> Element {
     rsx! {
         div { class: "p-6",
             div { class: "flex justify-between items-start mb-6",
@@ -319,6 +322,7 @@ fn NodeDetailSidebar(node: RoadmapNode, roadmap_id: String, on_close: EventHandl
                         let node_id = node.id.clone();
                         async move {
                             let _ = toggle_node_completion(roadmap_id, node_id).await;
+                            roadmap.restart();
                         }
                     });
                 },

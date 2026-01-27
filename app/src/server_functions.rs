@@ -1,6 +1,7 @@
 #[cfg(feature = "server")]
 use anyhow::{Context, Result};
 use dioxus::prelude::*;
+use std::str::FromStr;
 use std::{env, fs::File, io::BufReader};
 
 #[cfg(feature = "server")]
@@ -29,6 +30,7 @@ use crate::{LOAD_AND_EMBED_JSON, SESSION_DURATION_DAYS};
 
 #[cfg(feature = "server")]
 const MODEL: EmbeddingModel = EmbeddingModel::ModernBertEmbedLarge;
+const LLM_MODEL: &str = "tngtech/deepseek-r1t2-chimera:free";
 
 #[cfg(feature = "server")]
 static DB_INSTANCE: tokio::sync::OnceCell<Surreal<surrealdb::engine::local::Db>> =
@@ -45,8 +47,6 @@ impl<T, E: std::fmt::Display> IntoServerError<T> for Result<T, E> {
         self.map_err(|e| ServerFnError::new(e.to_string()))
     }
 }
-
-// const SESSION_COOKIE_NAME: &str = "skillforge_session";
 
 #[cfg(feature = "server")]
 async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
@@ -106,7 +106,11 @@ async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
                 data.level,
                 data.ctype
             );
-            let embedding = model.embed(vec![str_to_embed], None)?;
+            let embedding_batch = model.embed(vec![str_to_embed], None)?;
+            let embedding = embedding_batch
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Empty embedding returned"))?;
             let data_to_insert = CoursesDataWithEmbeddings {
                 id: None,
                 title: data.title.clone(),
@@ -376,7 +380,8 @@ pub async fn get_user_roadmaps(session_token: String) -> Result<Vec<Roadmap>, Se
         .await
         .into_server_error()?;
 
-    let roadmaps: Vec<Roadmap> = result.take(0).into_server_error()?;
+    let roadmaps_db: Vec<RoadmapDB> = result.take(0).into_server_error()?;
+    let roadmaps: Vec<Roadmap> = roadmaps_db.into_iter().map(Roadmap::from).collect();
 
     Ok(roadmaps)
 }
@@ -384,13 +389,14 @@ pub async fn get_user_roadmaps(session_token: String) -> Result<Vec<Roadmap>, Se
 #[server]
 pub async fn get_roadmap(roadmap_id: String) -> Result<Roadmap, ServerFnError> {
     let db = get_db().await?;
-
-    let roadmap: Option<Roadmap> = db
-        .select(("roadmaps", roadmap_id))
+    let id = RecordId::from_str(&roadmap_id)
+        .map_err(|_| ServerFnError::new("Could not parse RecordID"))?;
+    let roadmap_db: RoadmapDB = db
+        .select(id)
         .await
-        .into_server_error()?;
-
-    roadmap.ok_or_else(|| ServerFnError::new("Roadmap not found"))
+        .into_server_error()?
+        .ok_or_else(|| ServerFnError::new("Roadmap not found"))?;
+    Ok(Roadmap::from(roadmap_db))
 }
 
 #[server]
@@ -428,17 +434,14 @@ pub async fn generate_roadmap(
         .id
         .clone()
         .ok_or(ServerFnError::new("User ID not found"))?;
-
     let query_variations = generate_rag_queries(&skill_name, &user, &responses)
         .await
         .into_server_error()?;
-    dbg!(&query_variations);
     let relevant_resources = search_vector_db_multi_query(&query_variations).await?;
-    dbg!(&relevant_resources);
     let roadmap_nodes =
         generate_roadmap_with_llm(&skill_name, &user, &responses, &relevant_resources).await?;
     eprintln!("=============== nodes generated ===========");
-    let roadmap = Roadmap {
+    let roadmap = RoadmapDB {
         id: None,
         user_id: user_id.clone(),
         skill_name: skill_name.clone(),
@@ -447,18 +450,23 @@ pub async fn generate_roadmap(
         updated_at: Utc::now(),
     };
 
-    let created: Vec<Roadmap> = db
+    let created: Option<RoadmapDB> = db
         .create("roadmaps")
         .content(roadmap)
         .await
-        .into_server_error()?
-        .ok_or(ServerFnError::ServerError {
-            message: "Couldn't create database entry for the roadmap".to_string(),
-            code: 500,
-            details: None,
-        })?;
+        .into_server_error()?;
 
-    Ok(created.first().unwrap().id.clone().unwrap())
+    Ok(created.unwrap().id.map(|r| r.to_string()).unwrap())
+}
+
+fn clean_json_response(input: &str) -> String {
+    input
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim()
+        .to_string()
 }
 
 #[cfg(feature = "server")]
@@ -470,34 +478,50 @@ async fn generate_rag_queries(
     let client = reqwest::Client::new();
     let api_key = env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
 
-    let sys_prompt: &str = "You are an itermediate bot between an AI agent that is used to generate roadmap for users to learn a sepcific skill and an RAG system that contains information on various courses and macro and details on skilltype (whether it is a macro skill or micro skill).
-    The RAG stores the embddings in the given fields and format to store maximum context, and you are to create RAG querries accordingly:
-    Title: {title of the skill/course}, topic: {parent/main_topic}, description: {description of the course or skill}, content: {what content is in it}, Skill Path: {main skill > sub_skill > topic ... OR just skillname}, Prerequisites: {what the user needs to know before learning this}, level: {Beginner OR Intermediate OR Advanced}, Topic Size : {macro OR micro}
-    You are to generate 5 RAG querries (to get maximum context) based on the user preferences and details you recieve from the app, along with the name of the skill that the user wants to learn, and user's responses on questions asked by the app to evaluate how the user wants to learn and how much the user already knows (Give this more importance than user preferences in case of conflict of interests). Return ONLY the querries and strictly in the format of a JSON array";
+    let sys_prompt: &str = r#"You are a Query Generation AI for an educational RAG system. Your goal is to generate 5 distinct, high-quality search queries to retrieve relevant course material based on a user's intent.
 
-    let user_prompt: String = format!(
-        "
-        User Details:
-        Skills: {:?},
-        Preferences: {:?}
+THE RAG SCHEMA:
+The database contains course nodes with these fields:
+- Title, Topic (Parent/Main), Description, Content
+- Skill Path, Prerequisites
+- Level (Beginner, Intermediate, Advanced)
+- Topic Size (Macro, Micro)
 
-        Skill to learn: {skill_name}
+INSTRUCTIONS:
+1. Analyze the 'Skill to learn' and 'User Responses'.
+2. If 'User Responses' indicate a specific knowledge gap or preference (e.g., "I prefer video" or "I know the basics"), prioritize that over general user preferences.
+3. Formulate 5 specific semantic queries. Mix general broad searches (Macro) and specific technical searches (Micro).
+4. Include specific keywords related to the 'Level' (e.g., "Beginner tutorial", "Advanced concepts") if the user context suggests it.
 
-        User Resposes to questions asked for context: {:?}
-        ",
-        user.skills_learned, user.preferences, responses
+OUTPUT FORMAT RULES:
+- Return ONLY a raw JSON array of strings.
+- DO NOT use Markdown formatting (no ```json ... ```).
+- DO NOT include explanations or conversational filler.
+
+EXAMPLE INPUT:
+Skill: Rust, Level: Beginner, Context: "I want to learn memory management"
+
+EXAMPLE OUTPUT:
+["Rust programming for absolute beginners", "Rust ownership and borrowing explained", "Rust memory management deep dive", "Introduction to systems programming with Rust", "Rust macro skill path basics"]
+"#;
+
+    let user_prompt = format!(
+        "Skill to learn: {}\nUser Knowledge Context: {:?}\nUser Preferences: {:?}\nUser Skills: {:?}",
+        skill_name, responses, user.preferences, user.skills_learned
     );
     let body = serde_json::json!({
-        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "model": LLM_MODEL,
         "messages": [
             {
                 "role": "system",
                 "content": sys_prompt,
+            },
+            {
                 "role": "user",
                 "content": user_prompt
             }
         ],
-        "response_format": { "type": "json_object" }
+        "temperature": 0.3
     });
     let response = client
         .post("https://openrouter.ai/api/v1/chat/completions")
@@ -506,12 +530,17 @@ async fn generate_rag_queries(
         .json(&body)
         .send()
         .await?;
-
+    if !response.status().is_success() {
+        let error_text = response.text().await?;
+        return Err(anyhow::anyhow!("API Error: {}", error_text));
+    }
     let json: serde_json::Value = response.json().await?;
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No response content"))?;
-    let queries: Vec<String> = serde_json::from_str(content)?;
+    let content = clean_json_response(content);
+    let queries: Vec<String> = serde_json::from_str(&content)
+        .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {} | Content: {}", e, content))?;
     Ok(queries)
 }
 
@@ -523,13 +552,16 @@ async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesD
     let mut all_results = std::collections::HashMap::new();
 
     for query in queries {
-        let embedding = model.embed(vec![query.clone()], None)?;
+        let embedding_batch = model.embed(vec![query.clone()], None)?;
+        let embedding = embedding_batch
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Empty embedding returned"))?;
 
         let mut result = db
             .query("SELECT * FROM courses WHERE embedding <|10,COSINE|> $embedding LIMIT 5")
             .bind(("embedding", embedding))
             .await?;
-
         let courses: Vec<CoursesDataWithEmbeddings> = result.take(0)?;
         for course in courses {
             if let Some(id) = &course.id {
@@ -543,7 +575,7 @@ async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesD
         .map(CoursesDataClean::from)
         .collect();
     results.truncate(20);
-
+    eprintln!("RAG result generated");
     Ok(results)
 }
 
@@ -555,7 +587,6 @@ async fn generate_roadmap_with_llm(
     resources: &[CoursesDataClean],
 ) -> Result<Vec<RoadmapNode>> {
     let resources_json = serde_json::to_string_pretty(resources)?;
-    // inside generate_roadmap_with_llm(...)
     let prompt = format!(
     "Create a detailed learning roadmap for '{}'.\n\n\
     User Profile:\n\
@@ -569,6 +600,7 @@ async fn generate_roadmap_with_llm(
     {{\"nodes\": [ ... ]}}\n\
     - Do NOT return a top-level array.\n\
     - Do NOT wrap in markdown code fences.\n\
+    - Do NOT include id field. Server assigns IDs. \n\
     - Do NOT include any text outside JSON.\n\n\
     Each node must match:\n\
     {{\n\
@@ -640,7 +672,7 @@ async fn call_openrouter_for_questions(prompt: &str) -> Result<Vec<Question>> {
         }\n\n\
         Make questions conversational, relevant to the specific skill, and ensure options are realistic and well-balanced.c";
     let body = serde_json::json!({
-        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "model": LLM_MODEL,
         "messages": [
             {
                "role": "system",
@@ -705,7 +737,7 @@ async fn call_openrouter_for_roadmap(prompt: &str) -> Result<String> {
 {\"nodes\": [...]} and nothing else. No markdown. No commentary.";
 
     let body = serde_json::json!({
-        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "model": LLM_MODEL,
         "messages": [
             {
                 "role": "system",
@@ -727,7 +759,6 @@ async fn call_openrouter_for_roadmap(prompt: &str) -> Result<String> {
         .await?;
 
     let json: serde_json::Value = response.json().await?;
-    dbg!(&json);
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No response content"))?;
@@ -741,9 +772,9 @@ pub async fn toggle_node_completion(
     node_id: String,
 ) -> Result<(), ServerFnError> {
     let db = get_db().await?;
-
-    let mut roadmap: Roadmap = db
-        .select(("roadmaps", roadmap_id.clone()))
+    let id = RecordId::from_str(&roadmap_id).into_server_error()?;
+    let mut roadmap: RoadmapDB = db
+        .select(&id)
         .await
         .into_server_error()?
         .ok_or_else(|| ServerFnError::new("Roadmap not found"))?;
@@ -754,11 +785,7 @@ pub async fn toggle_node_completion(
 
     roadmap.updated_at = Utc::now();
 
-    let _: Option<Roadmap> = db
-        .update(("roadmaps", roadmap_id))
-        .content(roadmap)
-        .await
-        .into_server_error()?;
+    let _: Option<RoadmapDB> = db.update(id).content(roadmap).await.into_server_error()?;
 
     Ok(())
 }

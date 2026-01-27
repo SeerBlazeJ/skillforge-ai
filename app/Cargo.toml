@@ -1,6 +1,6 @@
 [package]
 name = "SkillForge"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Kaivan Mehta <kaivanmehta957@gmail.com>"]
 edition = "2021"
 
@@ -32,6 +32,8 @@ web-sys = { version = "0.3", features = [
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
 
 [features]
 default = ["web"]

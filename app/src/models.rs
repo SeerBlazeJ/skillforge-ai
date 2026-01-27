@@ -83,7 +83,7 @@ pub struct Session {
     pub expires_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)] // Added PartialEq
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Roadmap {
     pub id: Option<String>,
     pub user_id: String,
@@ -93,18 +93,109 @@ pub struct Roadmap {
     pub updated_at: DateTime<Utc>,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RoadmapNode {
-    pub id: String,
+pub struct RoadmapDB {
+    pub id: Option<RecordId>,
+    pub user_id: String,
     pub skill_name: String,
-    pub description: String,
-    pub resources: Vec<LearningResource>,
-    pub prerequisites: Vec<String>,
-    pub is_completed: bool,
-    pub position: NodePosition,
+    pub nodes: Vec<RoadmapNode>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[cfg(feature = "server")]
+impl From<RoadmapDB> for Roadmap {
+    fn from(value: RoadmapDB) -> Self {
+        Self {
+            id: value.id.map(|r| r.to_string()),
+            user_id: value.user_id,
+            skill_name: value.skill_name,
+            nodes: value.nodes,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl From<Roadmap> for RoadmapDB {
+    fn from(value: Roadmap) -> Self {
+        Self {
+            id: value.id.and_then(|s| s.parse().ok()),
+            user_id: value.user_id,
+            skill_name: value.skill_name,
+            nodes: value.nodes,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RoadmapNode {
+    #[serde(default)]
+    pub id: String,
+    pub skill_name: String,
+    pub description: String,
+    #[serde(default)]
+    pub resources: Vec<LearningResource>,
+    #[serde(default)]
+    pub prerequisites: Vec<String>,
+    #[serde(default)]
+    pub is_completed: bool,
+    #[serde(default)]
+    pub position: NodePosition,
+}
+
+/*
+#[cfg(feature = "server")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RoadmapNodeDB {
+    pub id: Option<RecordId>,
+    pub skill_name: String,
+    pub description: String,
+    #[serde(default)]
+    pub resources: Vec<LearningResource>,
+    #[serde(default)]
+    pub prerequisites: Vec<String>,
+    #[serde(default)]
+    pub is_completed: bool,
+    #[serde(default)]
+    pub position: NodePosition,
+}
+
+#[cfg(feature = "server")]
+impl From<RoadmapNodeDB> for RoadmapNode {
+    fn from(value: RoadmapNodeDB) -> Self {
+        Self {
+            id: value.id.map(|r| r.to_string()),
+            skill_name: value.skill_name,
+            description: value.description,
+            resources: value.resources,
+            prerequisites: value.prerequisites,
+            is_completed: value.is_completed,
+            position: value.position,
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl From<RoadmapNode> for RoadmapNodeDB {
+    fn from(value: RoadmapNode) -> Self {
+        Self {
+            id: value.id.and_then(|s| s.parse().ok()),
+            skill_name: value.skill_name,
+            description: value.description,
+            resources: value.resources,
+            prerequisites: value.prerequisites,
+            is_completed: value.is_completed,
+            position: value.position,
+        }
+    }
+}
+*/
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct NodePosition {
     pub x: i32,
     pub y: i32,
@@ -118,9 +209,10 @@ pub struct LearningResource {
     pub resource_type: String,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoursesDataWithEmbeddings {
-    pub id: Option<String>,
+    pub id: Option<RecordId>,
     pub title: String,
     pub description: String,
     pub channel_name: String,
@@ -131,7 +223,7 @@ pub struct CoursesDataWithEmbeddings {
     pub content: String,
     pub topic: String,
     pub prerequisite_topics: Vec<String>,
-    pub embedding: Vec<Vec<f32>>,
+    pub embedding: Vec<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,6 +241,7 @@ pub struct CoursesDataClean {
     pub prerequisite_topics: Vec<String>,
 }
 
+#[cfg(feature = "server")]
 impl From<CoursesDataWithEmbeddings> for CoursesDataClean {
     fn from(value: CoursesDataWithEmbeddings) -> Self {
         CoursesDataClean {
