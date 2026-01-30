@@ -578,7 +578,6 @@ async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesD
     eprintln!("RAG result generated");
     Ok(results)
 }
-
 #[cfg(feature = "server")]
 async fn generate_roadmap_with_llm(
     skill_name: &str,
@@ -586,36 +585,42 @@ async fn generate_roadmap_with_llm(
     responses: &[QuestionResponse],
     resources: &[CoursesDataClean],
 ) -> Result<Vec<RoadmapNode>> {
+    use std::collections::HashMap;
+
     let resources_json = serde_json::to_string_pretty(resources)?;
+
     let prompt = format!(
-    "Create a detailed learning roadmap for '{}'.\n\n\
-    User Profile:\n\
-    - Existing skills: {:?}\n\
-    - Learning preferences: {:?}\n\
-    - Question responses: {:?}\n\n\
-    Available Resources:\n\
-    {}\n\n\
-    OUTPUT FORMAT (STRICT):\n\
-    Return ONLY valid JSON in this exact shape:\n\
-    {{\"nodes\": [ ... ]}}\n\
-    - Do NOT return a top-level array.\n\
-    - Do NOT wrap in markdown code fences.\n\
-    - Do NOT include id field. Server assigns IDs. \n\
-    - Do NOT include any text outside JSON.\n\n\
-    Each node must match:\n\
-    {{\n\
-      \"skill_name\": \"...\",\n\
-      \"description\": \"...\",\n\
-      \"resources\": [{{\"title\":\"...\",\"platform\":\"...\",\"url\":null,\"resource_type\":\"...\"}}],\n\
-      \"prerequisites\": [\"...\"],\n\
-      \"is_completed\": false,\n\
-      \"position\": {{\"x\": 0, \"y\": 0}}\n\
-    }}",
-    skill_name,
-    user.skills_learned,
-    user.preferences,
-    responses,
-    resources_json
+        "Create a detailed learning roadmap for '{skill_name}'.\n\n\
+User Profile:\n\
+- Existing skills: {:?}\n\
+- Learning preferences: {:?}\n\
+- Question responses: {:?}\n\n\
+Available Resources:\n\
+{}\n\n\
+OUTPUT FORMAT (STRICT):\n\
+Return ONLY valid JSON in this exact shape:\n\
+{{\"nodes\": [ ... ]}}\n\
+- Do NOT return a top-level array.\n\
+- Do NOT wrap in markdown code fences.\n\
+- Do NOT include id field. Server assigns IDs.\n\
+- Do NOT include any text outside JSON.\n\n\
+IMPORTANT LINKING RULES:\n\
+- `prerequisites` must be an array of OTHER NODE `skill_name` strings (not IDs).\n\
+- `prev_node_id` and `next_node_id` must be the adjacent node's `skill_name` (or null).\n\n\
+Each node must match:\n\
+{{\n\
+  \"skill_name\": \"...\",\n\
+  \"description\": \"...\",\n\
+  \"resources\": [{{\"title\":\"...\",\"platform\":\"...\",\"url\":null,\"resource_type\":\"...\"}}],\n\
+  \"prerequisites\": [\"...\"],\n\
+  \"prev_node_id\": null,\n\
+  \"next_node_id\": null,\n\
+  \"is_completed\": false\n\
+}}",
+        user.skills_learned,
+        user.preferences,
+        responses,
+        resources_json
     );
 
     #[derive(serde::Deserialize)]
@@ -623,15 +628,42 @@ async fn generate_roadmap_with_llm(
         nodes: Vec<RoadmapNode>,
     }
 
-    let mut nodes_json: RoadmapNodesOut =
+    let mut nodes_out: RoadmapNodesOut =
         serde_json::from_str(&call_openrouter_for_roadmap(&prompt).await?).into_server_error()?;
 
-    for node in &mut nodes_json.nodes {
+    for node in &mut nodes_out.nodes {
         node.id = Uuid::new_v4().to_string();
         node.is_completed = false;
     }
 
-    Ok(nodes_json.nodes)
+    let name_to_id: HashMap<String, String> = nodes_out
+        .nodes
+        .iter()
+        .map(|n| (n.skill_name.clone(), n.id.clone()))
+        .collect();
+
+    let map_ref =
+        |s: &str| -> String { name_to_id.get(s).cloned().unwrap_or_else(|| s.to_string()) };
+
+    for node in &mut nodes_out.nodes {
+        node.prerequisites = node.prerequisites.iter().map(|p| map_ref(p)).collect();
+
+        node.prev_node_id = node
+            .prev_node_id
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .map(|s| map_ref(&s));
+
+        node.next_node_id = node
+            .next_node_id
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .map(|s| map_ref(&s));
+    }
+
+    Ok(nodes_out.nodes)
 }
 
 #[cfg(feature = "server")]

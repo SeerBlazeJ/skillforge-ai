@@ -1,6 +1,6 @@
 [package]
 name = "SkillForge"
-version = "0.8.0"
+version = "0.9.5"
 authors = ["Kaivan Mehta <kaivanmehta957@gmail.com>"]
 edition = "2021"
 

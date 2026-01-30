@@ -144,8 +144,8 @@ pub struct RoadmapNode {
     pub prerequisites: Vec<String>,
     #[serde(default)]
     pub is_completed: bool,
-    #[serde(default)]
-    pub position: NodePosition,
+    pub prev_node_id: Option<String>,
+    pub next_node_id: Option<String>,
 }
 
 /*
