@@ -30,7 +30,7 @@ use crate::{LOAD_AND_EMBED_JSON, SESSION_DURATION_DAYS};
 
 #[cfg(feature = "server")]
 const MODEL: EmbeddingModel = EmbeddingModel::ModernBertEmbedLarge;
-const LLM_MODEL: &str = "tngtech/deepseek-r1t2-chimera:free";
+const LLM_MODEL: &str = "nvidia/nemotron-3-nano-30b-a3b:free";
 
 #[cfg(feature = "server")]
 static DB_INSTANCE: tokio::sync::OnceCell<Surreal<surrealdb::engine::local::Db>> =
@@ -207,8 +207,8 @@ async fn get_user_from_session(session_token: String) -> Result<Option<User>, Se
     }
 }
 
-#[cfg(feature = "server")]
-async fn delete_session(session_token: String) -> Result<(), ServerFnError> {
+#[server]
+pub async fn delete_session(session_token: String) -> Result<(), ServerFnError> {
     let db = get_db().await.into_server_error()?;
 
     let mut result = db
@@ -546,26 +546,49 @@ EXAMPLE OUTPUT:
 
 #[cfg(feature = "server")]
 async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesDataClean>> {
-    let db = get_db().await?;
-    let mut model = TextEmbedding::try_new(InitOptions::new(MODEL))?;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::task::JoinSet;
 
-    let mut all_results = std::collections::HashMap::new();
+    let db = Arc::new(get_db().await?);
+    // let start = std::time::Instant::now();
 
-    for query in queries {
-        let embedding_batch = model.embed(vec![query.clone()], None)?;
-        let embedding = embedding_batch
-            .into_iter()
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("Empty embedding returned"))?;
+    // 1. BATCH embedding generation (most efficient for multiple queries)
+    let queries_vec = queries.to_vec();
+    let embeddings: Vec<Vec<f32>> =
+        tokio::task::spawn_blocking(move || -> Result<Vec<Vec<f32>>> {
+            let mut model = TextEmbedding::try_new(InitOptions::new(MODEL))?;
+            // Single batch call processes all queries together - much faster
+            let batch = model.embed(queries_vec, None)?;
+            Ok(batch)
+        })
+        .await??;
 
-        let mut result = db
-            .query("SELECT * FROM courses WHERE embedding <|10,COSINE|> $embedding LIMIT 5")
-            .bind(("embedding", embedding))
-            .await?;
-        let courses: Vec<CoursesDataWithEmbeddings> = result.take(0)?;
+    // eprintln!("Embeddings generated in {:?}", start.elapsed());
+
+    // 2. Concurrent DB queries with JoinSet
+    let mut db_tasks = JoinSet::new();
+
+    for embedding in embeddings {
+        let db = db.clone();
+        db_tasks.spawn(async move {
+            let mut result = db
+                .query("SELECT * FROM courses WHERE embedding <|10,400|> $embedding LIMIT 5")
+                .bind(("embedding", embedding))
+                .await?;
+            let courses: Vec<CoursesDataWithEmbeddings> = result.take(0)?;
+            Ok::<_, anyhow::Error>(courses)
+        });
+    }
+
+    // 3. Collect and deduplicate results
+    let mut all_results: HashMap<String, CoursesDataWithEmbeddings> = HashMap::new();
+
+    while let Some(joined) = db_tasks.join_next().await {
+        let courses = joined??;
         for course in courses {
             if let Some(id) = &course.id {
-                all_results.insert(id.clone(), course);
+                all_results.insert(id.to_string(), course);
             }
         }
     }
@@ -574,10 +597,12 @@ async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesD
         .into_values()
         .map(CoursesDataClean::from)
         .collect();
+
     results.truncate(20);
-    eprintln!("RAG result generated");
+    // eprintln!("RAG result generated in {:?}", start.elapsed());
     Ok(results)
 }
+
 #[cfg(feature = "server")]
 async fn generate_roadmap_with_llm(
     skill_name: &str,

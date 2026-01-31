@@ -19,6 +19,20 @@ pub fn get_session_token() -> Option<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
+pub fn clear_session_token() -> Option<()> {
+    use wasm_bindgen::JsCast;
+    use web_sys::HtmlDocument;
+
+    let window = web_sys::window()?;
+    let document = window.document()?;
+    let html_document = document.dyn_into::<HtmlDocument>().ok()?;
+
+    html_document
+        .set_cookie("skillforge_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;")
+        .ok()
+}
+
+#[cfg(target_arch = "wasm32")]
 pub fn set_session_cookie(token: &str, days: i64) {
     use wasm_bindgen::JsCast;
     use web_sys::HtmlDocument;
@@ -49,3 +63,8 @@ pub fn get_session_token() -> Option<String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn set_session_cookie(_token: &str, _days: i64) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn clear_session_token() -> Option<()> {
+    None
+}

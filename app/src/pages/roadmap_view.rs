@@ -56,7 +56,7 @@ pub fn RoadmapView(id: String) -> Element {
                                         for (idx , node) in ordered.into_iter().enumerate() {
                                             {
                                                 let node_id = node.id.clone();
-                                                let mut selected = selected_node_id().as_deref() == Some(&node_id);
+                                                let selected = selected_node_id().as_deref() == Some(&node_id);
 
                                                 rsx! {
                                                     RoadmapStepCard {
