@@ -74,8 +74,7 @@ pub fn Profile() -> Element {
                                 }
                             }
 
-                        // Tab Content
-
+                            // Tab Content
 
                             div { class: "p-8",
                                 match active_tab() {

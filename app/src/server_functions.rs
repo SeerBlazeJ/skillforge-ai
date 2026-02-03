@@ -308,7 +308,7 @@ pub async fn update_user_profile(
         .parse()
         .ok()
         .ok_or(ServerFnError::new("Could not parse user ID"))?;
-    let mut user: User = db
+    let mut user: UserDB = db
         .select(user_id)
         .await
         .into_server_error()?
@@ -325,7 +325,7 @@ pub async fn update_user_profile(
         user.preferences = prefs;
     }
 
-    let _: Vec<Option<User>> = db
+    let _: Option<UserDB> = db
         .update(user.id.clone().unwrap())
         .content(user)
         .await
@@ -835,14 +835,48 @@ pub async fn toggle_node_completion(
         .await
         .into_server_error()?
         .ok_or_else(|| ServerFnError::new("Roadmap not found"))?;
+    let mut skill_modified = String::new();
+    let mut was_completed = true;
+    let user_id = roadmap.user_id.clone();
 
     if let Some(node) = roadmap.nodes.iter_mut().find(|n| n.id == node_id) {
         node.is_completed = !node.is_completed;
+        was_completed = node.is_completed;
+        skill_modified = node.skill_name.clone();
     }
 
     roadmap.updated_at = Utc::now();
 
+    if was_completed {
+        db.query("UPDATE $uid SET skills_learned += $skill")
+            .bind(("uid", user_id.parse::<RecordId>().ok()))
+            .bind(("skill", skill_modified))
+            .await
+            .into_server_error()?;
+    } else {
+        db.query("UPDATE $uid SET skills_learned -= $skill")
+            .bind(("uid", user_id.parse::<RecordId>().ok()))
+            .bind(("skill", skill_modified))
+            .await
+            .into_server_error()?;
+    }
     let _: Option<RoadmapDB> = db.update(id).content(roadmap).await.into_server_error()?;
+
+    Ok(())
+}
+
+#[server]
+pub async fn delete_roadmap(roadmap_id: String) -> Result<(), ServerFnError> {
+    let db = get_db().await?;
+
+    let id: RecordId = RecordId::from_str(&roadmap_id)
+        .map_err(|e| ServerFnError::new(format!("Invalid roadmap ID: {}", e)))?;
+
+    let deleted: Option<RoadmapDB> = db.delete(id).await.into_server_error()?;
+
+    if deleted.is_none() {
+        return Err(ServerFnError::new("Roadmap not found or already deleted"));
+    }
 
     Ok(())
 }
