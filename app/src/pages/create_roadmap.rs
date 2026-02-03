@@ -240,7 +240,7 @@ fn QuestionStep(
     on_back: EventHandler<()>,
     show_back: bool,
 ) -> Element {
-    let is_msq = question.question_type == QuestionType::MSQ;
+    let is_msq = question.question_type == QuestionType::Msq;
 
     let mut toggle_option = move |option: String| {
         let mut answers = current_answer();
@@ -275,8 +275,8 @@ fn QuestionStep(
 
             div { class: "mb-6 inline-block px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium",
                 match question.question_type {
-                    QuestionType::MCQ => "Single Choice",
-                    QuestionType::MSQ => "Multiple Choice",
+                    QuestionType::Mcq => "Single Choice",
+                    QuestionType::Msq => "Multiple Choice",
                     QuestionType::TrueFalse => "True or False",
                     QuestionType::OneWord => "Short Answer",
                 }

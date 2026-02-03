@@ -66,13 +66,6 @@ pub struct UserPreferences {
     pub difficulty_preference: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SessionInfo {
-    pub user_id: String,
-    pub username: String,
-    pub name: String,
-}
-
 #[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -148,59 +141,6 @@ pub struct RoadmapNode {
     pub next_node_id: Option<String>,
 }
 
-/*
-#[cfg(feature = "server")]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RoadmapNodeDB {
-    pub id: Option<RecordId>,
-    pub skill_name: String,
-    pub description: String,
-    #[serde(default)]
-    pub resources: Vec<LearningResource>,
-    #[serde(default)]
-    pub prerequisites: Vec<String>,
-    #[serde(default)]
-    pub is_completed: bool,
-    #[serde(default)]
-    pub position: NodePosition,
-}
-
-#[cfg(feature = "server")]
-impl From<RoadmapNodeDB> for RoadmapNode {
-    fn from(value: RoadmapNodeDB) -> Self {
-        Self {
-            id: value.id.map(|r| r.to_string()),
-            skill_name: value.skill_name,
-            description: value.description,
-            resources: value.resources,
-            prerequisites: value.prerequisites,
-            is_completed: value.is_completed,
-            position: value.position,
-        }
-    }
-}
-
-#[cfg(feature = "server")]
-impl From<RoadmapNode> for RoadmapNodeDB {
-    fn from(value: RoadmapNode) -> Self {
-        Self {
-            id: value.id.and_then(|s| s.parse().ok()),
-            skill_name: value.skill_name,
-            description: value.description,
-            resources: value.resources,
-            prerequisites: value.prerequisites,
-            is_completed: value.is_completed,
-            position: value.position,
-        }
-    }
-}
-*/
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-pub struct NodePosition {
-    pub x: i32,
-    pub y: i32,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LearningResource {
     pub title: String,
@@ -269,8 +209,8 @@ pub struct Question {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum QuestionType {
-    MCQ,
-    MSQ,
+    Mcq,
+    Msq,
     TrueFalse,
     OneWord,
 }
@@ -279,12 +219,6 @@ pub enum QuestionType {
 pub struct QuestionResponse {
     pub question_id: String,
     pub answer: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RoadmapRequest {
-    pub skill_name: String,
-    pub user_responses: Vec<QuestionResponse>,
 }
 
 #[derive(Serialize, Deserialize)]

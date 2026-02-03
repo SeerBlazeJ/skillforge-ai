@@ -113,7 +113,7 @@ async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
             .ok_or_else(|| anyhow::anyhow!("Empty embedding returned"))?;
             let data_to_insert = CoursesDataWithEmbeddings {
                 id: None,
-                title: data.title.clone(),
+                title: data.title,
                 description: data.description,
                 topic: data.topic,
                 prerequisite_topics: data.prerequisite_topics,
@@ -128,7 +128,7 @@ async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
             let res: Option<CoursesDataWithEmbeddings> = db.create("courses").content(data_to_insert).await?;
             match res {
                 Some(_) => {}
-                None => println!("Failed creating entry for {}", data.title),
+                None => println!("Failed creating the entry."),
             }
         }
 
@@ -156,7 +156,7 @@ async fn create_session(user_id: String) -> Result<String, ServerFnError> {
 
     let session = Session {
         id: None,
-        user_id: user_id.clone(),
+        user_id,
         session_token: session_token.clone(),
         created_at: Utc::now(),
         expires_at: Utc::now() + Duration::days(SESSION_DURATION_DAYS),
@@ -167,9 +167,6 @@ async fn create_session(user_id: String) -> Result<String, ServerFnError> {
         .content(session)
         .await
         .into_server_error()?;
-    // .ok_or(ServerFnError::new(
-    //     "No response upon creation of entry by the database",
-    // ))?;
 
     Ok(session_token)
 }
@@ -235,7 +232,7 @@ pub async fn signup_user(
 
     let user_db = UserDB::from(User {
         id: None,
-        username: username.clone(),
+        username,
         password_hash,
         name,
         skills_learned: Vec::new(),
@@ -265,7 +262,7 @@ pub async fn login_user(username: String, password: String) -> Result<String, Se
     eprintln!("Found request for {}", &username);
     let users: Vec<UserDB> = db
         .query("SELECT * FROM users where username = $username;")
-        .bind(("username", username.clone()))
+        .bind(("username", username))
         .await
         .into_server_error()?
         .take(0)
@@ -273,10 +270,7 @@ pub async fn login_user(username: String, password: String) -> Result<String, Se
     if let Some(user) = users.first() {
         if verify(password.as_bytes(), &user.password_hash).into_server_error()? {
             let user = User::from(user.to_owned());
-            let user_id = user
-                .id
-                .clone()
-                .ok_or(ServerFnError::new("User has no ID"))?;
+            let user_id = user.id.ok_or(ServerFnError::new("User has no ID"))?;
             let session_token = create_session(user_id).await?;
             return Ok(session_token);
         }
@@ -350,11 +344,6 @@ pub async fn change_password(
         .await
         .into_server_error()?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
-    // let mut user = get_user_data(session_token).await?;
-    // let user_id = user
-    //     .id
-    //     .clone()
-    //     .ok_or(ServerFnError::new("User ID not found"))?;
 
     if !verify(old_password.as_bytes(), &user.password_hash).into_server_error()? {
         return Err(ServerFnError::new("Invalid old password"));
@@ -440,11 +429,10 @@ pub async fn generate_roadmap(
     let relevant_resources = search_vector_db_multi_query(&query_variations).await?;
     let roadmap_nodes =
         generate_roadmap_with_llm(&skill_name, &user, &responses, &relevant_resources).await?;
-    eprintln!("=============== nodes generated ===========");
     let roadmap = RoadmapDB {
         id: None,
-        user_id: user_id.clone(),
-        skill_name: skill_name.clone(),
+        user_id,
+        skill_name,
         nodes: roadmap_nodes,
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -546,60 +534,26 @@ EXAMPLE OUTPUT:
 
 #[cfg(feature = "server")]
 async fn search_vector_db_multi_query(queries: &[String]) -> Result<Vec<CoursesDataClean>> {
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use tokio::task::JoinSet;
-
-    let db = Arc::new(get_db().await?);
-    // let start = std::time::Instant::now();
-
-    // 1. BATCH embedding generation (most efficient for multiple queries)
-    let queries_vec = queries.to_vec();
-    let embeddings: Vec<Vec<f32>> =
-        tokio::task::spawn_blocking(move || -> Result<Vec<Vec<f32>>> {
-            let mut model = TextEmbedding::try_new(InitOptions::new(MODEL))?;
-            // Single batch call processes all queries together - much faster
-            let batch = model.embed(queries_vec, None)?;
-            Ok(batch)
-        })
-        .await??;
-
-    // eprintln!("Embeddings generated in {:?}", start.elapsed());
-
-    // 2. Concurrent DB queries with JoinSet
-    let mut db_tasks = JoinSet::new();
-
-    for embedding in embeddings {
-        let db = db.clone();
-        db_tasks.spawn(async move {
-            let mut result = db
-                .query("SELECT * FROM courses WHERE embedding <|10,400|> $embedding LIMIT 5")
-                .bind(("embedding", embedding))
-                .await?;
-            let courses: Vec<CoursesDataWithEmbeddings> = result.take(0)?;
-            Ok::<_, anyhow::Error>(courses)
-        });
+    let db = get_db().await?;
+    let mut model = TextEmbedding::try_new(InitOptions::new(MODEL))?;
+    let mut all_results: Vec<CoursesDataWithEmbeddings> = Vec::new();
+    for query in queries {
+        let embedding_batch = model.embed(vec![query], None)?;
+        let embedding = embedding_batch
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Empty embedding returned"))?;
+        let mut result = db
+            .query("SELECT * FROM courses WHERE embedding <|10,400|> $embedding LIMIT 5")
+            .bind(("embedding", embedding))
+            .await?;
+        let mut courses: Vec<CoursesDataWithEmbeddings> = result.take(0)?;
+        all_results.append(&mut courses);
     }
-
-    // 3. Collect and deduplicate results
-    let mut all_results: HashMap<String, CoursesDataWithEmbeddings> = HashMap::new();
-
-    while let Some(joined) = db_tasks.join_next().await {
-        let courses = joined??;
-        for course in courses {
-            if let Some(id) = &course.id {
-                all_results.insert(id.to_string(), course);
-            }
-        }
-    }
-
-    let mut results: Vec<CoursesDataClean> = all_results
-        .into_values()
+    let results: Vec<CoursesDataClean> = all_results
+        .into_iter()
         .map(CoursesDataClean::from)
         .collect();
-
-    results.truncate(20);
-    // eprintln!("RAG result generated in {:?}", start.elapsed());
     Ok(results)
 }
 
@@ -766,8 +720,8 @@ async fn call_openrouter_for_questions(prompt: &str) -> Result<Vec<Question>> {
             id: Uuid::new_v4().to_string(),
             question_text: q["question_text"].as_str().unwrap_or("").to_string(),
             question_type: match q["question_type"].as_str() {
-                Some("MCQ") => QuestionType::MCQ,
-                Some("MSQ") => QuestionType::MSQ,
+                Some("MCQ") => QuestionType::Mcq,
+                Some("MSQ") => QuestionType::Msq,
                 Some("TrueFalse") => QuestionType::TrueFalse,
                 _ => QuestionType::OneWord,
             },
