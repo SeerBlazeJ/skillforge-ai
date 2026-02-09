@@ -32,13 +32,14 @@ pub fn Dashboard() -> Element {
                     h1 { class: "text-2xl font-bold text-indigo-600", "SkillForge" }
                     div { class: "space-x-4",
                         div { class: "flex items-center gap-6 p-4",
+                            // 1. Profile Link
                             Link {
                                 to: Route::Profile {},
                                 class: "text-gray-700 hover:text-indigo-600",
                                 "Profile"
                             }
-                        }
-                        div { class: "flex items-center gap-6 p-4",
+
+                            // 2. Logout Button (Now inside the same flex container)
                             button {
                                 onclick: move |_| {
                                     let session_token_clone = session_token_clone.clone();
@@ -48,7 +49,9 @@ pub fn Dashboard() -> Element {
                                         let _ = delete_session(session_token_clone.clone()).await;
                                     }
                                 },
+                                // Kept your original styling exactly as is
                                 class: "group flex items-center justify-start w-11 h-11 bg-red-600 rounded-xl cursor-pointer relative overflow-hidden transition-all duration-200 shadow-lg hover:w-32 hover:rounded-lg active:translate-x-1 active:translate-y-1",
+
                                 div { class: "flex items-center justify-center w-full transition-all duration-300 group-hover:justify-start group-hover:px-3",
                                     svg {
                                         class: "w-4 h-4",

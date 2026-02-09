@@ -124,6 +124,7 @@ async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
                 ctype: data.ctype,
                 content: data.content,
                 embedding,
+                url: String::new(), // URL are added by a different module, as it was added in the later versions...
             };
             let res: Option<CoursesDataWithEmbeddings> = db.create("courses").content(data_to_insert).await?;
             match res {
@@ -590,7 +591,7 @@ Each node must match:\n\
 {{\n\
   \"skill_name\": \"...\",\n\
   \"description\": \"...\",\n\
-  \"resources\": [{{\"title\":\"...\",\"platform\":\"...\",\"url\":null,\"resource_type\":\"...\"}}],\n\
+  \"resources\": [{{\"title\":\"...\",\"platform\":\"...\",\"url\":...,\"resource_type\":\"...\"}}],\n\
   \"prerequisites\": [\"...\"],\n\
   \"prev_node_id\": null,\n\
   \"next_node_id\": null,\n\

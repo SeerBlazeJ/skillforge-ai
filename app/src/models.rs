@@ -164,6 +164,7 @@ pub struct CoursesDataWithEmbeddings {
     pub topic: String,
     pub prerequisite_topics: Vec<String>,
     pub embedding: Vec<f32>,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +180,7 @@ pub struct CoursesDataClean {
     pub content: String,
     pub topic: String,
     pub prerequisite_topics: Vec<String>,
+    pub url: String,
 }
 
 #[cfg(feature = "server")]
@@ -195,6 +197,7 @@ impl From<CoursesDataWithEmbeddings> for CoursesDataClean {
             content: value.content,
             topic: value.topic,
             prerequisite_topics: value.prerequisite_topics,
+            url: value.url,
         }
     }
 }
