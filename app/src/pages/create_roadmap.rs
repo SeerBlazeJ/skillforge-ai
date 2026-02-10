@@ -17,7 +17,7 @@ enum FlowStep {
 #[component]
 pub fn CreateRoadmap() -> Element {
     let mut step = use_signal(|| FlowStep::SkillInput);
-    let skill_name = use_signal(String::new); // Removed mut
+    let skill_name = use_signal(String::new);
     let mut questions = use_signal(Vec::<Question>::new);
     let mut current_question_idx = use_signal(|| 0);
     let mut responses = use_signal(Vec::<QuestionResponse>::new);
@@ -32,7 +32,6 @@ pub fn CreateRoadmap() -> Element {
     }
 
     let session_token_for_roadmap = token.unwrap();
-
     let session_token_for_questions = session_token_for_roadmap.clone();
 
     let load_questions = move |_| {
@@ -110,13 +109,13 @@ pub fn CreateRoadmap() -> Element {
     };
 
     rsx! {
-        div { class: "min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50",
+        div { class: "min-h-screen bg-[#050505] text-gray-100 font-sans selection:bg-teal-500/30 selection:text-teal-200",
             // Navigation
-            nav { class: "bg-white shadow-sm",
+            nav { class: "bg-[#050505]/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-40",
                 div { class: "container mx-auto px-6 py-4",
                     Link {
                         to: Route::Dashboard {},
-                        class: "text-indigo-600 hover:text-indigo-700 font-medium flex items-center",
+                        class: "text-teal-400 hover:text-teal-300 transition-colors font-medium flex items-center",
                         "← Back to Dashboard"
                     }
                 }
@@ -158,23 +157,24 @@ fn SkillInputStep(
     on_continue: EventHandler<()>,
 ) -> Element {
     let mut is_loading = use_signal(|| false);
-    rsx! {
 
-        div { class: "bg-white rounded-2xl shadow-xl p-8",
-            h2 { class: "text-3xl font-bold text-gray-900 mb-2", "What do you want to learn?" }
-            p { class: "text-gray-600 mb-8",
+    rsx! {
+        div { class: "bg-[#0f1012]/60 rounded-2xl shadow-none p-8 border border-white/5 backdrop-blur-md",
+            h2 { class: "text-3xl font-bold text-gray-100 mb-2", "What do you want to learn?" }
+            p { class: "text-gray-400 mb-8",
                 "Enter a skill or topic you'd like to master, and we'll create a personalized learning roadmap for you."
             }
 
             if let Some(err) = error() {
-                div { class: "mb-6 p-4 bg-red-50 text-red-700 rounded-lg", {err} }
+                div { class: "mb-6 p-4 bg-red-500/10 text-red-300 rounded-lg border border-red-500/20",
+                    {err}
+                }
             }
 
             input {
                 r#type: "text",
-                // Disable input while loading to prevent changes during fetch
                 disabled: is_loading(),
-                class: "w-full px-6 py-4 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:text-gray-500",
+                class: "w-full px-6 py-4 text-lg bg-[#050505] text-gray-100 border border-white/10 rounded-xl focus:ring-2 focus:ring-teal-500/30 focus:border-transparent outline-none transition disabled:bg-white/5 disabled:text-gray-500",
                 value: "{skill_name}",
                 oninput: move |e| skill_name.set(e.value()),
                 placeholder: "e.g., Machine Learning, Web Development, Python...",
@@ -188,19 +188,14 @@ fn SkillInputStep(
             }
 
             button {
-                // 2. Disable the button via HTML attribute when loading
                 disabled: is_loading(),
                 onclick: move |_| {
-                    // 3. Set loading to true and trigger callback
                     is_loading.set(true);
                     on_continue.call(());
                 },
-                // 4. Added flex utilities for centering the spinner and disabled styles
-                class: "mt-6 w-full py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold text-lg flex justify-center items-center disabled:opacity-70 disabled:cursor-not-allowed",
+                class: "mt-6 w-full py-4 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl hover:shadow-[0_0_20px_rgba(20,184,166,0.25)] transition font-semibold text-lg flex justify-center items-center disabled:opacity-70 disabled:cursor-not-allowed",
 
-                // 5. Conditionally render the content
                 if is_loading() {
-                    // Standard Tailwind Spin SVG
                     svg {
                         class: "animate-spin -ml-1 mr-3 h-5 w-5 text-white",
                         xmlns: "http://www.w3.org/2000/svg",
@@ -256,24 +251,24 @@ fn QuestionStep(
     };
 
     rsx! {
-        div { class: "bg-white rounded-2xl shadow-xl p-8",
+        div { class: "bg-[#0f1012]/60 rounded-2xl shadow-none p-8 border border-white/5 backdrop-blur-md",
             // Progress bar
             div { class: "mb-8",
-                div { class: "flex justify-between text-sm text-gray-600 mb-2",
+                div { class: "flex justify-between text-sm text-gray-400 mb-2",
                     span { "Question {question_number} of {total_questions}" }
                     span { "{((question_number * 100) / total_questions)}%" }
                 }
-                div { class: "w-full bg-gray-200 rounded-full h-2",
+                div { class: "w-full bg-white/10 rounded-full h-2",
                     div {
-                        class: "bg-indigo-600 h-2 rounded-full transition-all duration-300",
+                        class: "bg-gradient-to-r from-teal-500 to-blue-600 h-2 rounded-full transition-all duration-300",
                         style: "width: {((question_number * 100) / total_questions)}%",
                     }
                 }
             }
 
-            h3 { class: "text-2xl font-bold text-gray-900 mb-2", {question.question_text} }
+            h3 { class: "text-2xl font-bold text-gray-100 mb-2", {question.question_text} }
 
-            div { class: "mb-6 inline-block px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium",
+            div { class: "mb-6 inline-block px-3 py-1 bg-teal-500/10 text-teal-300 border border-teal-500/20 rounded-full text-sm font-medium",
                 match question.question_type {
                     QuestionType::Mcq => "Single Choice",
                     QuestionType::Msq => "Multiple Choice",
@@ -283,7 +278,9 @@ fn QuestionStep(
             }
 
             if let Some(err) = error() {
-                div { class: "mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm", {err} }
+                div { class: "mb-4 p-3 bg-red-500/10 text-red-300 rounded-lg text-sm border border-red-500/20",
+                    {err}
+                }
             }
 
             div { class: "space-y-3 mb-8",
@@ -291,7 +288,7 @@ fn QuestionStep(
                     QuestionType::OneWord => rsx! {
                         input {
                             r#type: "text",
-                            class: "w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none",
+                            class: "w-full px-4 py-3 bg-[#050505] text-gray-100 border border-white/10 rounded-lg focus:ring-2 focus:ring-teal-500/30 focus:border-transparent outline-none transition",
                             placeholder: "Type your answer...",
                             value: "{current_answer().first().unwrap_or(&String::new())}",
                             oninput: move |e| current_answer.set(vec![e.value()]),
@@ -312,18 +309,22 @@ fn QuestionStep(
                                         key: "{option}",
                                         onclick: move |_| toggle_option(option_clone.clone()),
                                         class: format!(
-                                            "w-full p-4 text-left border-2 rounded-lg transition {}",
+                                            "w-full p-4 text-left border rounded-lg transition {}",
                                             if is_selected {
-                                                "border-indigo-500 bg-indigo-50 text-indigo-900"
+                                                "border-teal-500/40 bg-teal-500/10 text-gray-100"
                                             } else {
-                                                "border-gray-300 hover:border-indigo-300 hover:bg-gray-50"
+                                                "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-gray-200"
                                             },
                                         ),
                                         div { class: "flex items-center",
                                             div {
                                                 class: format!(
-                                                    "w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center {}",
-                                                    if is_selected { "border-indigo-500 bg-indigo-500" } else { "border-gray-400" },
+                                                    "w-5 h-5 rounded-full border mr-3 flex items-center justify-center {}",
+                                                    if is_selected {
+                                                        "border-teal-400 bg-teal-500"
+                                                    } else {
+                                                        "border-white/25 bg-transparent"
+                                                    },
                                                 ),
                                                 if is_selected {
                                                     svg {
@@ -348,13 +349,13 @@ fn QuestionStep(
                 if show_back {
                     button {
                         onclick: move |_| on_back.call(()),
-                        class: "px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium",
+                        class: "px-6 py-3 border border-white/10 text-gray-300 rounded-lg hover:bg-white/5 transition font-medium",
                         "← Back"
                     }
                 }
                 button {
                     onclick: move |_| on_submit.call(()),
-                    class: "flex-1 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold",
+                    class: "flex-1 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:shadow-[0_0_16px_rgba(20,184,166,0.25)] transition font-semibold",
                     if question_number == total_questions {
                         "Generate Roadmap 🎯"
                     } else {
@@ -369,10 +370,10 @@ fn QuestionStep(
 #[component]
 fn GeneratingStep() -> Element {
     rsx! {
-        div { class: "bg-white rounded-2xl shadow-xl p-12 text-center",
+        div { class: "bg-[#0f1012]/60 rounded-2xl shadow-none p-12 text-center border border-white/5 backdrop-blur-md",
             div { class: "mb-6",
                 svg {
-                    class: "animate-spin h-16 w-16 mx-auto text-indigo-600",
+                    class: "animate-spin h-16 w-16 mx-auto text-teal-400",
                     view_box: "0 0 24 24",
                     circle {
                         class: "opacity-25",
@@ -390,8 +391,8 @@ fn GeneratingStep() -> Element {
                     }
                 }
             }
-            h3 { class: "text-2xl font-bold text-gray-900 mb-3", "Crafting Your Roadmap..." }
-            p { class: "text-gray-600 mb-6",
+            h3 { class: "text-2xl font-bold text-gray-100 mb-3", "Crafting Your Roadmap..." }
+            p { class: "text-gray-400 mb-6",
                 "Our AI is analyzing thousands of resources to create the perfect learning path for you."
             }
             div { class: "space-y-2 text-sm text-gray-500",
@@ -408,10 +409,10 @@ fn CompleteStep(roadmap_id: String) -> Element {
     let nav = navigator();
 
     rsx! {
-        div { class: "bg-white rounded-2xl shadow-xl p-12 text-center",
+        div { class: "bg-[#0f1012]/60 rounded-2xl shadow-none p-12 text-center border border-white/5 backdrop-blur-md",
             div { class: "text-6xl mb-6", "🎉" }
-            h3 { class: "text-3xl font-bold text-gray-900 mb-3", "Your Roadmap is Ready!" }
-            p { class: "text-gray-600 mb-8",
+            h3 { class: "text-3xl font-bold text-gray-100 mb-3", "Your Roadmap is Ready!" }
+            p { class: "text-gray-400 mb-8",
                 "We've created a personalized learning path tailored to your goals and existing knowledge."
             }
             button {
@@ -420,7 +421,7 @@ fn CompleteStep(roadmap_id: String) -> Element {
                         id: roadmap_id.clone(),
                     });
                 },
-                class: "px-8 py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold text-lg",
+                class: "px-8 py-4 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl hover:shadow-[0_0_20px_rgba(20,184,166,0.25)] transition font-semibold text-lg",
                 "View Your Roadmap →"
             }
         }

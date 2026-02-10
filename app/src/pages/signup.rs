@@ -13,7 +13,6 @@ pub fn Signup() -> Element {
     let nav = navigator();
 
     let mut validate_form = move || -> bool {
-        // Added mut
         let mut errors = Vec::new();
 
         // Username validation
@@ -54,7 +53,6 @@ pub fn Signup() -> Element {
 
     let on_submit = move |evt: Event<FormData>| {
         evt.prevent_default();
-
         if !validate_form() {
             return;
         }
@@ -83,190 +81,221 @@ pub fn Signup() -> Element {
     };
 
     rsx! {
-        div { class: "min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center px-6 py-12",
-            div { class: "max-w-md w-full bg-white rounded-2xl shadow-2xl p-8",
-                // Header
-                div { class: "text-center mb-8",
-                    h2 { class: "text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent",
-                        "Create Your Account"
-                    }
-                    p { class: "text-gray-600 mt-2", "Start your personalized learning journey" }
-                }
+        div { class: "min-h-screen bg-[#050505] text-gray-100 font-sans selection:bg-teal-500/30 selection:text-teal-200 overflow-x-hidden relative flex items-center justify-center px-6 py-12",
+            // Ambient Background Effects
+            div { class: "fixed inset-0 pointer-events-none overflow-hidden",
+                div { class: "absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-teal-500/5 rounded-full blur-[100px] animate-float-slow" }
+                div { class: "absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-blue-600/5 rounded-full blur-[100px] animate-float-slow delay-2000" }
+                div { class: "absolute top-[40%] left-[40%] w-[30vw] h-[30vw] bg-emerald-500/5 rounded-full blur-[80px] animate-pulse-slow" }
+            }
 
-                // Error messages
-                if let Some(err) = error() {
-                    div { class: "mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start",
-                        svg {
-                            class: "w-5 h-5 mr-2 mt-0.5 flex-shrink-0",
-                            fill: "currentColor",
-                            view_box: "0 0 20 20",
-                            path { d: "M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" }
-                        }
-                        span { {err} }
-                    }
-                }
+            // Grid Pattern Overlay
+            div { class: "fixed inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" }
 
-                // Validation errors
-                if !validation_errors().is_empty() {
-                    div { class: "mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg",
-                        p { class: "text-sm font-medium text-yellow-800 mb-2",
-                            "Please fix the following errors:"
+            // Signup Card
+            div { class: "w-full max-w-lg relative z-10 animate-slide-up",
+                div { class: "bg-[#0f1012]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] p-8 md:p-10 overflow-hidden relative",
+                    // Subtle top glow
+                    div { class: "absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-500/20 to-transparent" }
+
+                    // Header
+                    div { class: "text-center mb-8",
+                        h2 { class: "text-3xl font-bold tracking-tight mb-2",
+                            span { class: "bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent animate-gradient-text",
+                                "Create Account"
+                            }
                         }
-                        ul { class: "text-sm text-yellow-700 space-y-1 list-disc list-inside",
-                            for err in validation_errors() {
-                                li { key: "{err}", {err} }
+                        p { class: "text-gray-400 text-sm",
+                            "Start your personalized learning journey today"
+                        }
+                    }
+
+                    // Main Error Display
+                    if let Some(err) = error() {
+                        div { class: "mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-200 rounded-lg flex items-start animate-fade-in",
+                            span { class: "mr-3 text-lg", "⚠️" }
+                            span { class: "text-sm", "{err}" }
+                        }
+                    }
+
+                    // Validation Errors List
+                    if !validation_errors().is_empty() {
+                        div { class: "mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg animate-fade-in",
+                            p { class: "text-sm font-medium text-yellow-200 mb-2",
+                                "Please check the following:"
+                            }
+                            ul { class: "text-sm text-yellow-200/80 space-y-1 list-disc list-inside",
+                                for err in validation_errors() {
+                                    li { key: "{err}", "{err}" }
+                                }
                             }
                         }
                     }
-                }
 
-                // Form
-                form { onsubmit: on_submit, class: "space-y-5",
-                    // Name field
-                    div {
-                        label {
-                            r#for: "name",
-                            class: "block text-sm font-medium text-gray-700 mb-2",
-                            "Full Name"
-                            span { class: "text-red-500", " *" }
+                    form { onsubmit: on_submit, class: "space-y-5",
+                        // Name Field
+                        div { class: "space-y-1.5",
+                            label {
+                                r#for: "name",
+                                class: "block text-sm font-medium text-gray-400 ml-1",
+                                "Full Name"
+                            }
+                            div { class: "relative group",
+                                input {
+                                    id: "name",
+                                    r#type: "text",
+                                    class: "w-full bg-[#0a0a0a]/50 text-gray-100 px-4 py-3 rounded-xl border border-gray-800 focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-300 placeholder:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-700",
+                                    value: "{name}",
+                                    oninput: move |e| {
+                                        name.set(e.value());
+                                        validation_errors.set(Vec::new());
+                                    },
+                                    placeholder: "Enter your full name",
+                                    disabled: is_loading(),
+                                }
+                            }
                         }
-                        input {
-                            id: "name",
-                            r#type: "text",
-                            class: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition",
-                            value: "{name}",
-                            oninput: move |e| {
-                                name.set(e.value());
-                                validation_errors.set(Vec::new());
-                            },
-                            placeholder: "Enter your full name",
+
+                        // Username Field
+                        div { class: "space-y-1.5",
+                            label {
+                                r#for: "username",
+                                class: "block text-sm font-medium text-gray-400 ml-1",
+                                "Username"
+                            }
+                            div { class: "relative group",
+                                input {
+                                    id: "username",
+                                    r#type: "text",
+                                    class: "w-full bg-[#0a0a0a]/50 text-gray-100 px-4 py-3 rounded-xl border border-gray-800 focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-300 placeholder:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-700",
+                                    value: "{username}",
+                                    oninput: move |e| {
+                                        username.set(e.value());
+                                        validation_errors.set(Vec::new());
+                                    },
+                                    placeholder: "Choose a username",
+                                    disabled: is_loading(),
+                                    autocomplete: "username",
+                                }
+                            }
+                            p { class: "text-xs text-gray-600 ml-1",
+                                "3+ chars, letters, numbers & underscores"
+                            }
+                        }
+
+                        // Password Field
+                        div { class: "space-y-1.5",
+                            label {
+                                r#for: "password",
+                                class: "block text-sm font-medium text-gray-400 ml-1",
+                                "Password"
+                            }
+                            div { class: "relative group",
+                                input {
+                                    id: "password",
+                                    r#type: "password",
+                                    class: "w-full bg-[#0a0a0a]/50 text-gray-100 px-4 py-3 rounded-xl border border-gray-800 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all duration-300 placeholder:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-700",
+                                    value: "{password}",
+                                    oninput: move |e| {
+                                        password.set(e.value());
+                                        validation_errors.set(Vec::new());
+                                    },
+                                    placeholder: "Create a strong password",
+                                    disabled: is_loading(),
+                                    autocomplete: "new-password",
+                                }
+                            }
+                            p { class: "text-xs text-gray-600 ml-1",
+                                "8+ chars, uppercase, lowercase & number"
+                            }
+                        }
+
+                        // Confirm Password Field
+                        div { class: "space-y-1.5",
+                            label {
+                                r#for: "confirm-password",
+                                class: "block text-sm font-medium text-gray-400 ml-1",
+                                "Confirm Password"
+                            }
+                            div { class: "relative group",
+                                input {
+                                    id: "confirm-password",
+                                    r#type: "password",
+                                    class: "w-full bg-[#0a0a0a]/50 text-gray-100 px-4 py-3 rounded-xl border border-gray-800 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all duration-300 placeholder:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-700",
+                                    value: "{confirm_password}",
+                                    oninput: move |e| {
+                                        confirm_password.set(e.value());
+                                        validation_errors.set(Vec::new());
+                                    },
+                                    placeholder: "Confirm your password",
+                                    disabled: is_loading(),
+                                    autocomplete: "new-password",
+                                }
+                            }
+                        }
+
+                        // Submit Button
+                        button {
+                            r#type: "submit",
+                            class: "w-full relative group py-3.5 mt-4 rounded-xl bg-gradient-to-r from-teal-500 to-blue-600 text-white font-medium shadow-lg shadow-teal-900/20 hover:shadow-teal-500/20 hover:shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all duration-300 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden flex justify-center items-center",
                             disabled: is_loading(),
-                        }
-                    }
 
-                    // Username field
-                    div {
-                        label {
-                            r#for: "username",
-                            class: "block text-sm font-medium text-gray-700 mb-2",
-                            "Username"
-                            span { class: "text-red-500", " *" }
-                        }
-                        input {
-                            id: "username",
-                            r#type: "text",
-                            class: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition",
-                            value: "{username}",
-                            oninput: move |e| {
-                                username.set(e.value());
-                                validation_errors.set(Vec::new());
-                            },
-                            placeholder: "Choose a username",
-                            disabled: is_loading(),
-                            autocomplete: "username",
-                        }
-                        p { class: "mt-1 text-xs text-gray-500",
-                            "3+ characters, letters, numbers, and underscores only"
-                        }
-                    }
+                            // Shine effect
+                            div { class: "absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" }
 
-                    // Password field
-                    div {
-                        label {
-                            r#for: "password",
-                            class: "block text-sm font-medium text-gray-700 mb-2",
-                            "Password"
-                            span { class: "text-red-500", " *" }
-                        }
-                        input {
-                            id: "password",
-                            r#type: "password",
-                            class: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition",
-                            value: "{password}",
-                            oninput: move |e| {
-                                password.set(e.value());
-                                validation_errors.set(Vec::new());
-                            },
-                            placeholder: "Create a strong password",
-                            disabled: is_loading(),
-                            autocomplete: "new-password",
-                        }
-                        p { class: "mt-1 text-xs text-gray-500",
-                            "8+ characters with uppercase, lowercase, and numbers"
-                        }
-                    }
-
-                    // Confirm password field
-                    div {
-                        label {
-                            r#for: "confirm-password",
-                            class: "block text-sm font-medium text-gray-700 mb-2",
-                            "Confirm Password"
-                            span { class: "text-red-500", " *" }
-                        }
-                        input {
-                            id: "confirm-password",
-                            r#type: "password",
-                            class: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition",
-                            value: "{confirm_password}",
-                            oninput: move |e| {
-                                confirm_password.set(e.value());
-                                validation_errors.set(Vec::new());
-                            },
-                            placeholder: "Confirm your password",
-                            disabled: is_loading(),
-                            autocomplete: "new-password",
-                        }
-                    }
-
-                    // Submit button
-                    button {
-                        r#type: "submit",
-                        class: "w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center",
-                        disabled: is_loading(),
-
-                        if is_loading() {
-                            svg {
-                                class: "animate-spin h-5 w-5 mr-2",
-                                view_box: "0 0 24 24",
-                                circle {
-                                    class: "opacity-25",
-                                    cx: "12",
-                                    cy: "12",
-                                    r: "10",
-                                    stroke: "currentColor",
-                                    stroke_width: "4",
+                            if is_loading() {
+                                svg {
+                                    class: "animate-spin -ml-1 mr-3 h-5 w-5 text-white/90",
+                                    view_box: "0 0 24 24",
                                     fill: "none",
+                                    circle {
+                                        class: "opacity-25",
+                                        cx: "12",
+                                        cy: "12",
+                                        r: "10",
+                                        stroke: "currentColor",
+                                        stroke_width: "4",
+                                    }
+                                    path {
+                                        class: "opacity-75",
+                                        fill: "currentColor",
+                                        d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z",
+                                    }
                                 }
-                                path {
-                                    class: "opacity-75",
-                                    fill: "currentColor",
-                                    d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z",
-                                }
+                                span { "Creating Account..." }
+                            } else {
+                                span { "Create Account" }
                             }
-                            "Creating account..."
-                        } else {
-                            "Create Account"
                         }
                     }
-                }
 
-                // Footer
-                p { class: "text-center mt-6 text-gray-600",
-                    "Already have an account? "
-                    Link {
-                        to: Route::Login {},
-                        class: "text-indigo-600 hover:text-indigo-700 font-medium hover:underline",
-                        "Login"
+                    // Footer Link
+                    div { class: "text-center mt-8 text-sm text-gray-500",
+                        "Already have an account? "
+                        Link {
+                            to: Route::Login {},
+                            class: if is_loading() { "text-teal-500/50 cursor-not-allowed pointer-events-none" } else { "text-teal-400 hover:text-teal-300 font-medium transition-colors hover:underline decoration-teal-500/30 underline-offset-4" },
+                            "Login"
+                        }
                     }
-                }
 
-                // Terms and privacy
-                p { class: "text-center mt-4 text-xs text-gray-500",
-                    "By signing up, you agree to our "
-                    a { href: "#", class: "text-indigo-600 hover:underline", "Terms of Service" }
-                    " and "
-                    a { href: "#", class: "text-indigo-600 hover:underline", "Privacy Policy" }
+                    // Terms
+                    div { class: "text-center mt-6 pt-6 border-t border-gray-800",
+                        p { class: "text-xs text-gray-600",
+                            "By signing up, you agree to our "
+                            a {
+                                href: "#",
+                                class: "text-gray-500 hover:text-teal-400 transition-colors underline decoration-gray-700",
+                                "Terms of Service"
+                            }
+                            " and "
+                            a {
+                                href: "#",
+                                class: "text-gray-500 hover:text-teal-400 transition-colors underline decoration-gray-700",
+                                "Privacy Policy"
+                            }
+                        }
+                    }
                 }
             }
         }

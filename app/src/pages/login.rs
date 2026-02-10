@@ -9,10 +9,12 @@ pub fn Login() -> Element {
     let mut password = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let nav = navigator();
+
     let on_submit = move |evt: FormEvent| {
         evt.prevent_default();
         let u = username().trim().to_string();
         let p = password().to_string();
+
         spawn(async move {
             match login_user(u, p).await {
                 Ok(token) => {
@@ -35,98 +37,120 @@ pub fn Login() -> Element {
     let mut is_loading = use_signal(|| false);
 
     rsx! {
-        // 1. Initialize the loading state
-        div { class: "min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center px-6",
-            div { class: "max-w-md w-full bg-white rounded-2xl shadow-2xl p-8",
-                h2 { class: "text-3xl font-bold text-center mb-8 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent",
-                    "Welcome Back"
-                }
+        div { class: "min-h-screen bg-[#050505] text-gray-100 font-sans selection:bg-teal-500/30 selection:text-teal-200 overflow-x-hidden relative flex items-center justify-center px-6",
+            // Ambient Background Effects
+            div { class: "fixed inset-0 pointer-events-none overflow-hidden",
+                div { class: "absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-teal-500/5 rounded-full blur-[100px] animate-float-slow" }
+                div { class: "absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-blue-600/5 rounded-full blur-[100px] animate-float-slow delay-2000" }
+            }
 
-                if let Some(err) = error() {
-                    div { class: "mb-4 p-4 bg-red-50 text-red-700 rounded-lg", {err} }
-                }
+            // Grid Pattern Overlay
+            div { class: "fixed inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" }
 
-                form {
-                    // 2. Wrap the submit handler to set loading state
-                    onsubmit: move |e| {
-                        if !is_loading() {
-                            is_loading.set(true);
-                            on_submit(e);
-                        }
-                    },
-                    class: "space-y-6",
-                    div {
-                        label { class: "block text-sm font-medium text-gray-700 mb-2",
-                            "Username"
-                        }
-                        input {
-                            r#type: "text",
-                            // 3. Disable input during loading
-                            disabled: is_loading(),
-                            class: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:text-gray-500",
-                            value: "{username}",
-                            oninput: move |e| username.set(e.value()),
-                            placeholder: "Enter your username",
+            // Login Card
+            div { class: "w-full max-w-md relative z-10 animate-slide-up",
+                div { class: "bg-[#0f1012]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] p-8 md:p-10 overflow-hidden relative",
+                    // Subtle top glow on card
+                    div { class: "absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-500/20 to-transparent" }
+
+                    h2 { class: "text-3xl font-bold text-center mb-8 tracking-tight",
+                        span { class: "bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent animate-gradient-text",
+                            "Welcome Back"
                         }
                     }
 
-                    div {
-                        label { class: "block text-sm font-medium text-gray-700 mb-2",
-                            "Password"
-                        }
-                        input {
-                            r#type: "password",
-                            // 3. Disable input during loading
-                            disabled: is_loading(),
-                            class: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:text-gray-500",
-                            value: "{password}",
-                            oninput: move |e| password.set(e.value()),
-                            placeholder: "Enter your password",
+                    if let Some(err) = error() {
+                        div { class: "mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-200 rounded-lg text-sm flex items-center",
+                            span { class: "mr-2", "⚠️" }
+                            "{err}"
                         }
                     }
 
-                    button {
-                        r#type: "submit",
-                        // 4. Disable button to prevent double-submit
-                        disabled: is_loading(),
-                        // 5. Flex utilities for centering and disabled styling
-                        class: "w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium flex justify-center items-center disabled:opacity-70 disabled:cursor-not-allowed",
+                    form {
+                        onsubmit: move |e| {
+                            if !is_loading() {
+                                is_loading.set(true);
+                                on_submit(e);
+                            }
+                        },
+                        class: "space-y-6",
 
-                        // 6. Conditional rendering for Spinner vs Text
-                        if is_loading() {
-                            svg {
-                                class: "animate-spin -ml-1 mr-3 h-5 w-5 text-white",
-                                xmlns: "http://www.w3.org/2000/svg",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-                                circle {
-                                    class: "opacity-25",
-                                    cx: "12",
-                                    cy: "12",
-                                    r: "10",
-                                    stroke: "currentColor",
-                                    stroke_width: "4",
-                                }
-                                path {
-                                    class: "opacity-75",
-                                    fill: "currentColor",
-                                    d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z",
+                        // Username Input
+                        div { class: "space-y-2",
+                            label { class: "block text-sm font-medium text-gray-400 ml-1",
+                                "Username"
+                            }
+                            div { class: "relative group",
+                                input {
+                                    r#type: "text",
+                                    disabled: is_loading(),
+                                    class: "w-full bg-[#0a0a0a]/50 text-gray-100 px-4 py-3 rounded-xl border border-gray-800 focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-300 placeholder:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-700",
+                                    value: "{username}",
+                                    oninput: move |e| username.set(e.value()),
+                                    placeholder: "Enter your username",
                                 }
                             }
-                            "Logging in..."
-                        } else {
-                            "Login"
+                        }
+
+                        // Password Input
+                        div { class: "space-y-2",
+                            label { class: "block text-sm font-medium text-gray-400 ml-1",
+                                "Password"
+                            }
+                            div { class: "relative group",
+                                input {
+                                    r#type: "password",
+                                    disabled: is_loading(),
+                                    class: "w-full bg-[#0a0a0a]/50 text-gray-100 px-4 py-3 rounded-xl border border-gray-800 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all duration-300 placeholder:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-700",
+                                    value: "{password}",
+                                    oninput: move |e| password.set(e.value()),
+                                    placeholder: "••••••••",
+                                }
+                            }
+                        }
+
+                        // Submit Button
+                        button {
+                            r#type: "submit",
+                            disabled: is_loading(),
+                            class: "w-full relative group py-3 rounded-xl bg-gradient-to-r from-teal-500 to-blue-600 text-white font-medium shadow-lg shadow-teal-900/20 hover:shadow-teal-500/20 hover:shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all duration-300 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden flex justify-center items-center",
+                            div { class: "absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" }
+
+                            if is_loading() {
+                                svg {
+                                    class: "animate-spin -ml-1 mr-3 h-5 w-5 text-white/90",
+                                    xmlns: "http://www.w3.org/2000/svg",
+                                    fill: "none",
+                                    view_box: "0 0 24 24",
+                                    circle {
+                                        class: "opacity-25",
+                                        cx: "12",
+                                        cy: "12",
+                                        r: "10",
+                                        stroke: "currentColor",
+                                        stroke_width: "4",
+                                    }
+                                    path {
+                                        class: "opacity-75",
+                                        fill: "currentColor",
+                                        d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z",
+                                    }
+                                }
+                                span { "Logging in..." }
+                            } else {
+                                span { "Login" }
+                            }
                         }
                     }
-                }
 
-                p { class: "text-center mt-6 text-gray-600",
-                    "Don't have an account? "
-                    Link {
-                        to: Route::Signup {},
-                        // Optional: Disable link pointer events if loading
-                        class: if is_loading() { "text-indigo-400 cursor-not-allowed font-medium pointer-events-none" } else { "text-indigo-600 hover:text-indigo-700 font-medium" },
-                        "Sign up"
+                    // Footer Link
+                    div { class: "text-center mt-8 text-sm text-gray-500",
+                        "Don't have an account? "
+                        Link {
+                            to: Route::Signup {},
+                            class: if is_loading() { "text-teal-500/50 cursor-not-allowed pointer-events-none" } else { "text-teal-400 hover:text-teal-300 font-medium transition-colors hover:underline decoration-teal-500/30 underline-offset-4" },
+                            "Sign up now"
+                        }
                     }
                 }
             }

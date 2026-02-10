@@ -10,7 +10,7 @@ pub struct User {
     pub password_hash: String,
     pub name: String,
     #[serde(default)]
-    pub skills_learned: Vec<String>,
+    pub skills_learned: Vec<UserSkills>,
     #[serde(default)]
     pub preferences: UserPreferences,
     pub created_at: DateTime<Utc>,
@@ -23,7 +23,7 @@ pub struct UserDB {
     pub username: String,
     pub password_hash: String,
     pub name: String,
-    pub skills_learned: Vec<String>,
+    pub skills_learned: Vec<UserSkills>,
     pub preferences: UserPreferences,
     pub created_at: DateTime<Utc>,
 }
@@ -70,7 +70,7 @@ pub struct UserPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: Option<RecordId>,
-    pub user_id: String,
+    pub user_id: RecordId,
     pub session_token: String,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
@@ -90,7 +90,7 @@ pub struct Roadmap {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RoadmapDB {
     pub id: Option<RecordId>,
-    pub user_id: String,
+    pub user_id: RecordId,
     pub skill_name: String,
     pub nodes: Vec<RoadmapNode>,
     pub created_at: DateTime<Utc>,
@@ -102,7 +102,7 @@ impl From<RoadmapDB> for Roadmap {
     fn from(value: RoadmapDB) -> Self {
         Self {
             id: value.id.map(|r| r.to_string()),
-            user_id: value.user_id,
+            user_id: value.user_id.to_string(),
             skill_name: value.skill_name,
             nodes: value.nodes,
             created_at: value.created_at,
@@ -111,12 +111,13 @@ impl From<RoadmapDB> for Roadmap {
     }
 }
 
+// TODO: Use tryfrom - idiomatic approach
 #[cfg(feature = "server")]
 impl From<Roadmap> for RoadmapDB {
     fn from(value: Roadmap) -> Self {
         Self {
             id: value.id.and_then(|s| s.parse().ok()),
-            user_id: value.user_id,
+            user_id: value.user_id.parse().unwrap(),
             skill_name: value.skill_name,
             nodes: value.nodes,
             created_at: value.created_at,
@@ -242,4 +243,11 @@ pub struct JsonData {
 #[derive(Serialize, Deserialize)]
 pub struct JsonDataCollection {
     pub data: Vec<JsonData>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct UserSkills {
+    pub skillname: String,
+    // pub skill_level: u8,
+    pub date_learnt: DateTime<Utc>,
 }

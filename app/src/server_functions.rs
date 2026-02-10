@@ -1,6 +1,8 @@
 #[cfg(feature = "server")]
 use anyhow::{Context, Result};
+use chrono::{DateTime, Days, Duration, Utc};
 use dioxus::prelude::*;
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::{env, fs::File, io::BufReader};
 
@@ -12,9 +14,6 @@ use surrealdb::{engine::local::RocksDb, RecordId, Surreal};
 
 #[cfg(feature = "server")]
 use bcrypt::{hash, verify, DEFAULT_COST};
-
-#[cfg(feature = "server")]
-use chrono::Utc;
 
 #[cfg(feature = "server")]
 use uuid::Uuid;
@@ -58,32 +57,6 @@ async fn get_db() -> Result<&'static Surreal<surrealdb::engine::local::Db>> {
 
             db.use_ns("main").use_db("main").await?;
 
-            db.query("DEFINE TABLE users;").await?;
-            db.query("DEFINE FIELD username ON users TYPE string;")
-                .await?;
-            db.query("DEFINE FIELD password_hash ON users TYPE string;")
-                .await?;
-            db.query("DEFINE FIELD name ON users TYPE string;").await?;
-            db.query("DEFINE INDEX unique_username ON users FIELDS username UNIQUE;")
-                .await?;
-
-            db.query("DEFINE TABLE sessions;").await?;
-            db.query("DEFINE FIELD user_id ON sessions TYPE string;")
-                .await?;
-            db.query("DEFINE FIELD session_token ON sessions TYPE string;")
-                .await?;
-            db.query("DEFINE FIELD created_at ON sessions TYPE string;")
-                .await?;
-            db.query("DEFINE FIELD expires_at ON sessions TYPE string;")
-                .await?;
-            db.query("DEFINE INDEX unique_session_token ON sessions FIELDS session_token UNIQUE;")
-                .await?;
-
-            db.query("DEFINE TABLE roadmaps;").await?;
-            db.query("DEFINE FIELD user_id ON roadmaps TYPE string;")
-                .await?;
-            db.query("DEFINE FIELD skill_name ON roadmaps TYPE string;")
-                .await?;
 
     if LOAD_AND_EMBED_JSON {
                 let file = File::open("../final_data.json")
@@ -152,6 +125,8 @@ fn generate_session_token() -> String {
 async fn create_session(user_id: String) -> Result<String, ServerFnError> {
     use chrono::Duration;
 
+    let user_id: RecordId = user_id.parse().into_server_error()?;
+
     let db = get_db().await.into_server_error()?;
     let session_token = generate_session_token();
 
@@ -188,11 +163,7 @@ async fn get_user_from_session(session_token: String) -> Result<Option<User>, Se
         if session.expires_at < Utc::now() {
             return Ok(None);
         }
-        let user_id: RecordId = session
-            .user_id
-            .parse()
-            .ok()
-            .ok_or(ServerFnError::new("Could not parse user ID"))?;
+        let user_id: &RecordId = &session.user_id;
         let user: UserDB = db
             .select(user_id)
             .await
@@ -260,7 +231,6 @@ pub async fn signup_user(
 #[server]
 pub async fn login_user(username: String, password: String) -> Result<String, ServerFnError> {
     let db = get_db().await?;
-    eprintln!("Found request for {}", &username);
     let users: Vec<UserDB> = db
         .query("SELECT * FROM users where username = $username;")
         .bind(("username", username))
@@ -295,7 +265,7 @@ pub async fn get_user_data(session_token: String) -> Result<User, ServerFnError>
 pub async fn update_user_profile(
     user_id: String,
     name: Option<String>,
-    skills_learned: Option<Vec<String>>,
+    skills_learned: Option<Vec<UserSkills>>,
     preferences: Option<UserPreferences>,
 ) -> Result<(), ServerFnError> {
     let db = get_db().await?;
@@ -430,6 +400,8 @@ pub async fn generate_roadmap(
     let relevant_resources = search_vector_db_multi_query(&query_variations).await?;
     let roadmap_nodes =
         generate_roadmap_with_llm(&skill_name, &user, &responses, &relevant_resources).await?;
+
+    let user_id: RecordId = user_id.parse().into_server_error()?;
     let roadmap = RoadmapDB {
         id: None,
         user_id,
@@ -466,7 +438,6 @@ async fn generate_rag_queries(
 ) -> Result<Vec<String>> {
     let client = reqwest::Client::new();
     let api_key = env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
-
     let sys_prompt: &str = r#"You are a Query Generation AI for an educational RAG system. Your goal is to generate 5 distinct, high-quality search queries to retrieve relevant course material based on a user's intent.
 
 THE RAG SCHEMA:
@@ -800,17 +771,22 @@ pub async fn toggle_node_completion(
         skill_modified = node.skill_name.clone();
     }
 
+    let skill_modified = UserSkills {
+        skillname: skill_modified,
+        date_learnt: Utc::now(),
+    };
+
     roadmap.updated_at = Utc::now();
 
     if was_completed {
         db.query("UPDATE $uid SET skills_learned += $skill")
-            .bind(("uid", user_id.parse::<RecordId>().ok()))
+            .bind(("uid", user_id))
             .bind(("skill", skill_modified))
             .await
             .into_server_error()?;
     } else {
         db.query("UPDATE $uid SET skills_learned -= $skill")
-            .bind(("uid", user_id.parse::<RecordId>().ok()))
+            .bind(("uid", user_id))
             .bind(("skill", skill_modified))
             .await
             .into_server_error()?;
@@ -834,4 +810,70 @@ pub async fn delete_roadmap(roadmap_id: String) -> Result<(), ServerFnError> {
     }
 
     Ok(())
+}
+
+#[server]
+pub async fn get_progress_report(
+    days: u16,
+    session_token: String,
+) -> Result<Option<HashMap<DateTime<Utc>, u8>>, ServerFnError> {
+    #[derive(serde::Deserialize)]
+    struct UserQueryResult {
+        skills_learned: Option<Vec<UserSkills>>,
+    }
+    let db = get_db().await?;
+    let mut result = db
+        .query("SELECT * FROM sessions WHERE session_token = $session_token")
+        .bind(("session_token", session_token))
+        .await
+        .into_server_error()?;
+
+    let sessions: Vec<Session> = result.take(0).into_server_error()?;
+
+    if let Some(session) = sessions.first() {
+        if session.expires_at < Utc::now() {
+            return Ok(None);
+        }
+        let user_id: RecordId = session.user_id.clone();
+        let curr_datetime: DateTime<Utc> = Utc::now();
+        let start_datetime: DateTime<Utc> = curr_datetime - Days::new(days as u64);
+        // Fetch the record wrapped in the struct
+        let result: Vec<UserQueryResult> = db
+            .query("SELECT skills_learned FROM $user_id")
+            .bind(("user_id", user_id))
+            .await
+            .into_server_error()?
+            .take(0)
+            .into_server_error()?;
+
+        // Unwrap the first result and then the skills vector
+        let all_skills = result.into_iter().next().and_then(|r| r.skills_learned);
+        if all_skills.clone().is_none_or(|x| x.is_empty()) {
+            return Ok(None);
+        }
+        let mut selected_skills: Vec<UserSkills> = all_skills
+            .unwrap()
+            .into_iter()
+            .filter(|x| x.date_learnt > start_datetime)
+            .collect();
+        if selected_skills.is_empty() {
+            return Ok(None);
+        }
+        selected_skills.sort_by_key(|x| x.date_learnt);
+        let mut day_wise_progress: HashMap<DateTime<Utc>, u8> = HashMap::new();
+        let mut temp_datetime = start_datetime;
+        while temp_datetime <= curr_datetime {
+            let day_skills: Vec<&UserSkills> = selected_skills
+                .iter()
+                .filter(|x| x.date_learnt.date_naive() == temp_datetime.date_naive())
+                .collect();
+            day_wise_progress.insert(temp_datetime, day_skills.len() as u8);
+            temp_datetime = temp_datetime
+                .checked_add_signed(Duration::days(1))
+                .expect("Date overflowed when adding a day");
+        }
+        Ok(Some(day_wise_progress))
+    } else {
+        Ok(None)
+    }
 }

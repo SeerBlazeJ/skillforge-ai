@@ -17,22 +17,26 @@ pub fn RoadmapView(id: String) -> Element {
 
     let mut selected_node_id = use_signal(|| None::<String>);
 
-    rsx! {
-        div { class: "min-h-screen bg-gray-50",
-            nav { class: "bg-white shadow-sm",
+    return rsx! {
+        div { class: "min-h-screen bg-[#050505] text-gray-100 font-sans selection:bg-teal-500/30 selection:text-teal-200",
+            // Top nav
+            nav { class: "bg-[#050505]/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-40",
                 div { class: "container mx-auto px-6 py-4 flex justify-between items-center",
                     Link {
                         to: Route::Dashboard {},
-                        class: "text-indigo-600 hover:text-indigo-700 font-medium",
+                        class: "text-teal-400 hover:text-teal-300 transition-colors font-medium",
                         "← Back to Dashboard"
                     }
 
                     match roadmap.read_unchecked().as_ref() {
                         Some(Ok(r)) => rsx! {
-                            h1 { class: "text-xl font-bold text-gray-900", "{r.skill_name.clone()}" }
+                            h1 { class: "text-xl font-bold text-gray-100 truncate max-w-[60vw]", "{r.skill_name.clone()}" }
                         },
-                        _ => rsx! {
-                            h1 { "Loading..." }
+                        Some(Err(_)) => rsx! {
+                            h1 { class: "text-xl font-bold text-gray-100", "Roadmap" }
+                        },
+                        None => rsx! {
+                            h1 { class: "text-xl font-bold text-gray-100", "Loading..." }
                         },
                     }
                 }
@@ -42,13 +46,38 @@ pub fn RoadmapView(id: String) -> Element {
                 Some(Ok(roadmap_data)) => {
                     let ordered = ordered_nodes(roadmap_data);
 
+                    // Build sidebar element in Rust (avoids RSX match parsing issues)
+                    let sidebar: Element = match selected_node_id() {
+                        Some(id) => {
+                            let node = roadmap_data.nodes.iter().find(|n| n.id == id).cloned();
+                            match node {
+                                Some(node) => rsx! {
+                                    NodeDetailSidebar {
+                                        node,
+                                        roadmap: roadmap_data.clone(),
+                                        roadmap_id: roadmap_id.clone(),
+                                        roadmap_resource: roadmap,
+                                        selected_node_id,
+                                        on_close: move |_| selected_node_id.set(None),
+                                    }
+                                },
+                                None => rsx! {
+                                    RoadmapOverview { roadmap: roadmap_data.clone() }
+                                },
+                            }
+                        }
+                        None => rsx! {
+                            RoadmapOverview { roadmap: roadmap_data.clone() }
+                        },
+                    };
+
                     rsx! {
                         div { class: "flex h-[calc(100vh-72px)]",
                             // Main timeline
-                            div { class: "flex-1 overflow-y-auto p-6 bg-white",
+                            div { class: "flex-1 overflow-y-auto custom-scroll p-6 bg-[#050505]",
                                 div { class: "max-w-4xl mx-auto",
                                     div { class: "flex items-center justify-between mb-6",
-                                        h2 { class: "text-lg font-semibold text-gray-900", "Learning path" }
+                                        h2 { class: "text-lg font-semibold text-gray-100", "Learning path" }
                                         RoadmapProgressPill { roadmap: roadmap_data.clone() }
                                     }
 
@@ -56,7 +85,7 @@ pub fn RoadmapView(id: String) -> Element {
                                         for (idx , node) in ordered.into_iter().enumerate() {
                                             {
                                                 let node_id = node.id.clone();
-                                                let selected = selected_node_id().as_deref() == Some(&node_id);
+                                                let is_selected = selected_node_id().as_deref() == Some(&node_id);
 
                                                 rsx! {
                                                     RoadmapStepCard {
@@ -66,51 +95,32 @@ pub fn RoadmapView(id: String) -> Element {
                                                         roadmap: roadmap_data.clone(),
                                                         roadmap_id: roadmap_id.clone(),
                                                         roadmap_resource: roadmap,
-                                                        selected,
+                                                        selected: is_selected,
                                                         on_select: move |_| selected_node_id.set(Some(node_id.clone())),
                                                     }
                                                 }
                                             }
                                         }
-
                                     }
                                 }
                             }
 
                             // Sidebar
-                            div { class: "w-[26rem] bg-gray-50 border-l border-gray-200 overflow-y-auto",
-                                match selected_node_id() {
-                                    Some(id) => {
-                                        let node = roadmap_data.nodes.iter().find(|n| n.id == id).cloned();
-                                        match node {
-                                            Some(node) => rsx! {
-                                                NodeDetailSidebar {
-                                                    node,
-                                                    roadmap: roadmap_data.clone(),
-                                                    roadmap_id: roadmap_id.clone(),
-                                                    roadmap_resource: roadmap,
-                                                    selected_node_id,
-                                                    on_close: move |_| selected_node_id.set(None),
-                                                }
-                                            },
-                                            None => rsx! {
-                                                RoadmapOverview { roadmap: roadmap_data.clone() }
-                                            },
-                                        }
-                                    }
-                                    None => rsx! {
-                                        RoadmapOverview { roadmap: roadmap_data.clone() }
-                                    },
-                                }
+                            div { class: "w-[26rem] bg-[#0b0c0e] border-l border-white/10 overflow-y-auto custom-scroll",
+                                {sidebar}
                             }
                         }
                     }
                 }
+
                 Some(Err(e)) => rsx! {
                     div { class: "container mx-auto px-6 py-12",
-                        div { class: "bg-red-50 text-red-700 p-6 rounded-lg", "Error loading roadmap: {e}" }
+                        div { class: "bg-red-500/10 text-red-300 p-6 rounded-lg border border-red-500/20 backdrop-blur-md",
+                            "Error loading roadmap: {e}"
+                        }
                     }
                 },
+
                 None => rsx! {
                     div { class: "container mx-auto px-6 py-12 text-center",
                         div { class: "text-gray-500", "Loading roadmap..." }
@@ -118,7 +128,7 @@ pub fn RoadmapView(id: String) -> Element {
                 },
             }
         }
-    }
+    };
 }
 
 fn ordered_nodes(roadmap: &Roadmap) -> Vec<RoadmapNode> {
@@ -154,7 +164,6 @@ fn ordered_nodes(roadmap: &Roadmap) -> Vec<RoadmapNode> {
 
     for head in heads {
         let mut cur_id = head.id.clone();
-
         loop {
             if !visited.insert(cur_id.clone()) {
                 break;
@@ -163,7 +172,6 @@ fn ordered_nodes(roadmap: &Roadmap) -> Vec<RoadmapNode> {
                 break;
             };
             out.push(node.clone());
-
             match node.next_node_id.as_ref() {
                 Some(next) if by_id.contains_key(next) => cur_id = next.clone(),
                 _ => break,
@@ -178,6 +186,7 @@ fn ordered_nodes(roadmap: &Roadmap) -> Vec<RoadmapNode> {
         .filter(|n| !visited.contains(&n.id))
         .cloned()
         .collect();
+
     remaining.sort_by(|a, b| a.skill_name.cmp(&b.skill_name));
     out.extend(remaining);
 
@@ -185,8 +194,6 @@ fn ordered_nodes(roadmap: &Roadmap) -> Vec<RoadmapNode> {
 }
 
 fn label_for_ref(roadmap: &Roadmap, reference: &str) -> String {
-    // If reference is an ID, show the corresponding node skill name.
-    // If it's already a plain skill name (unmapped), show as-is.
     roadmap
         .nodes
         .iter()
@@ -214,9 +221,9 @@ fn RoadmapProgressPill(roadmap: Roadmap) -> Element {
     };
 
     rsx! {
-        div { class: "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-sm font-medium",
+        div { class: "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/10 text-teal-300 text-sm font-medium border border-teal-500/20",
             span { "{progress}% complete" }
-            span { class: "text-indigo-300", "•" }
+            span { class: "text-gray-600", "•" }
             span { "{completed}/{total}" }
         }
     }
@@ -233,20 +240,21 @@ fn RoadmapStepCard(
     on_select: EventHandler<()>,
 ) -> Element {
     let node_id = node.id.clone();
+
     let status_dot = if node.is_completed {
         "bg-green-500"
     } else {
-        "bg-gray-300"
+        "bg-white/20"
     };
 
     rsx! {
         div {
             class: format!(
-                "rounded-xl border p-4 transition cursor-pointer {}",
+                "rounded-xl border p-5 transition cursor-pointer {}",
                 if selected {
-                    "border-indigo-400 bg-indigo-50"
+                    "border-teal-500/40 bg-teal-500/10 shadow-[0_0_18px_rgba(20,184,166,0.12)]"
                 } else {
-                    "border-gray-200 bg-white hover:shadow-sm"
+                    "border-white/10 bg-[#0f1012]/40 hover:bg-[#0f1012]/70 hover:border-white/20"
                 },
             ),
             onclick: move |_| on_select.call(()),
@@ -256,12 +264,12 @@ fn RoadmapStepCard(
                     div { class: "flex items-center gap-3",
                         div { class: format!("w-3 h-3 rounded-full {status_dot}") }
                         span { class: "text-xs font-semibold text-gray-500", "#{idx}" }
-                        h3 { class: "text-base font-semibold text-gray-900 truncate",
+                        h3 { class: "text-base font-semibold text-gray-100 truncate",
                             "{node.skill_name.clone()}"
                         }
                     }
 
-                    p { class: "mt-2 text-sm text-gray-600 leading-relaxed",
+                    p { class: "mt-2 text-sm text-gray-400 leading-relaxed",
                         "{truncate_text(&node.description, 140)}"
                     }
 
@@ -273,13 +281,12 @@ fn RoadmapStepCard(
                                     rsx! {
                                         span {
                                             key: "pr-{node.id}-{prereq}",
-                                            class: "text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200",
+                                            class: "text-xs px-2 py-1 rounded-full bg-white/5 text-gray-300 border border-white/10",
                                             "{label}"
                                         }
                                     }
                                 }
                             }
-
                         }
                     }
 
@@ -300,9 +307,9 @@ fn RoadmapStepCard(
                     class: format!(
                         "shrink-0 px-3 py-2 rounded-lg text-sm font-semibold transition {}",
                         if node.is_completed {
-                            "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                            "bg-white/10 text-gray-100 hover:bg-white/15"
                         } else {
-                            "bg-indigo-600 text-white hover:bg-indigo-700"
+                            "bg-gradient-to-r from-teal-500 to-blue-600 text-white hover:shadow-[0_0_16px_rgba(20,184,166,0.25)]"
                         },
                     ),
                     onclick: move |e| {
@@ -349,10 +356,10 @@ fn NodeDetailSidebar(
     rsx! {
         div { class: "p-6",
             div { class: "flex justify-between items-start mb-6",
-                h2 { class: "text-2xl font-bold text-gray-900", "{node.skill_name.clone()}" }
+                h2 { class: "text-2xl font-bold text-gray-100", "{node.skill_name.clone()}" }
                 button {
                     onclick: move |_| on_close.call(()),
-                    class: "text-gray-400 hover:text-gray-600",
+                    class: "text-gray-500 hover:text-gray-200 transition",
                     "✕"
                 }
             }
@@ -362,9 +369,9 @@ fn NodeDetailSidebar(
                     class: format!(
                         "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {}",
                         if node.is_completed {
-                            "bg-green-100 text-green-800"
+                            "bg-green-500/10 text-green-300 border border-green-500/20"
                         } else {
-                            "bg-yellow-100 text-yellow-800"
+                            "bg-yellow-500/10 text-yellow-200 border border-yellow-500/20"
                         },
                     ),
                     if node.is_completed {
@@ -379,7 +386,7 @@ fn NodeDetailSidebar(
                 div { class: "mb-6 grid grid-cols-2 gap-3",
                     if let Some(prev) = prev_label {
                         button {
-                            class: "p-3 bg-white border border-gray-200 rounded-lg text-left hover:shadow-sm transition",
+                            class: "p-3 bg-white/5 border border-white/10 rounded-lg text-left hover:bg-white/10 transition",
                             onclick: move |_| {
                                 if let Some(prev_id) = node.prev_node_id.clone() {
                                     selected_node_id.set(Some(prev_id));
@@ -388,12 +395,13 @@ fn NodeDetailSidebar(
                             div { class: "text-xs text-gray-500 font-semibold uppercase tracking-wide",
                                 "Previous"
                             }
-                            div { class: "text-sm text-gray-900 font-medium", "{prev}" }
+                            div { class: "text-sm text-gray-100 font-medium", "{prev}" }
                         }
                     }
+
                     if let Some(next) = next_label {
                         button {
-                            class: "p-3 bg-white border border-gray-200 rounded-lg text-left hover:shadow-sm transition",
+                            class: "p-3 bg-white/5 border border-white/10 rounded-lg text-left hover:bg-white/10 transition",
                             onclick: move |_| {
                                 if let Some(next_id) = node.next_node_id.clone() {
                                     selected_node_id.set(Some(next_id));
@@ -402,45 +410,41 @@ fn NodeDetailSidebar(
                             div { class: "text-xs text-gray-500 font-semibold uppercase tracking-wide",
                                 "Next"
                             }
-                            div { class: "text-sm text-gray-900 font-medium", "{next}" }
+                            div { class: "text-sm text-gray-100 font-medium", "{next}" }
                         }
                     }
                 }
             }
 
             div { class: "mb-6",
-                h3 { class: "text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2",
+                h3 { class: "text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2",
                     "Description"
                 }
-                p { class: "text-gray-600 leading-relaxed", "{node.description.clone()}" }
+                p { class: "text-gray-400 leading-relaxed", "{node.description.clone()}" }
             }
 
             if !node.prerequisites.is_empty() {
                 div { class: "mb-6",
-                    h3 { class: "text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2",
+                    h3 { class: "text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2",
                         "Prerequisites"
                     }
-
                     div { class: "flex flex-wrap gap-2",
                         for prereq in &node.prerequisites {
                             {
                                 let prereq_id = prereq.clone();
                                 let label = label_for_ref(&roadmap, prereq);
-
-                                // Avoid capturing `roadmap` inside the onclick closure
                                 let can_jump = roadmap.nodes.iter().any(|n| n.id == prereq.as_str());
 
                                 rsx! {
                                     span {
                                         key: "chip-{node.id}-{prereq}",
-                                        class: "text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200 cursor-pointer hover:bg-gray-200",
+                                        class: "text-xs px-2 py-1 rounded-full bg-white/5 text-gray-300 border border-white/10 cursor-pointer hover:bg-white/10",
                                         onclick: move |_| {
                                             if can_jump {
                                                 selected_node_id.set(Some(prereq_id.clone()));
                                             }
                                         },
                                         "{label}"
-                                    // alternatively: {label}  (raw expression) [web:14]
                                     }
                                 }
                             }
@@ -451,7 +455,7 @@ fn NodeDetailSidebar(
 
             if !node.resources.is_empty() {
                 div { class: "mb-6",
-                    h3 { class: "text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3",
+                    h3 { class: "text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3",
                         "Learning Resources"
                     }
                     div { class: "space-y-3",
@@ -466,9 +470,9 @@ fn NodeDetailSidebar(
                 class: format!(
                     "w-full py-3 rounded-lg font-semibold transition {}",
                     if node.is_completed {
-                        "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        "bg-white/10 text-gray-100 hover:bg-white/15"
                     } else {
-                        "bg-indigo-600 text-white hover:bg-indigo-700"
+                        "bg-gradient-to-r from-teal-500 to-blue-600 text-white hover:shadow-[0_0_16px_rgba(20,184,166,0.25)]"
                     },
                 ),
                 onclick: move |_| {
@@ -488,26 +492,27 @@ fn NodeDetailSidebar(
                 }
             }
         }
-
     }
 }
 
 #[component]
 fn ResourceCard(resource: LearningResource) -> Element {
     rsx! {
-        div { class: "p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition",
+        div { class: "p-4 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition",
             div { class: "flex items-start justify-between mb-2",
-                h4 { class: "font-semibold text-gray-900 flex-1", "{resource.title.clone()}" }
-                span { class: "text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded",
+                h4 { class: "font-semibold text-gray-100 flex-1", "{resource.title.clone()}" }
+                span { class: "text-xs px-2 py-1 bg-teal-500/10 text-teal-300 rounded border border-teal-500/20",
                     "{resource.resource_type.clone()}"
                 }
             }
-            p { class: "text-sm text-gray-600 mb-2", "{resource.platform.clone()}" }
+
+            p { class: "text-sm text-gray-400 mb-2", "{resource.platform.clone()}" }
+
             if let Some(url) = &resource.url {
                 a {
                     href: "{url}",
                     target: "_blank",
-                    class: "text-sm text-indigo-600 hover:text-indigo-700 font-medium",
+                    class: "text-sm text-teal-400 hover:text-teal-300 font-medium transition-colors",
                     "Open Resource →"
                 }
             }
@@ -527,33 +532,36 @@ fn RoadmapOverview(roadmap: Roadmap) -> Element {
 
     rsx! {
         div { class: "p-6",
-            h2 { class: "text-2xl font-bold text-gray-900 mb-4", "Roadmap Overview" }
+            h2 { class: "text-2xl font-bold text-gray-100 mb-4", "Roadmap Overview" }
 
             div { class: "mb-6",
-                div { class: "flex justify-between text-sm text-gray-600 mb-2",
+                div { class: "flex justify-between text-sm text-gray-400 mb-2",
                     span { "Progress" }
                     span { "{completed}/{total} completed" }
                 }
-                div { class: "w-full bg-gray-200 rounded-full h-3",
+
+                div { class: "w-full bg-white/10 rounded-full h-3",
                     div {
-                        class: "bg-indigo-600 h-3 rounded-full transition-all",
+                        class: "bg-gradient-to-r from-teal-500 to-blue-600 h-3 rounded-full transition-all",
                         style: "width: {progress}%;",
                     }
                 }
             }
 
             div { class: "space-y-4",
-                div { class: "p-4 bg-white rounded-lg border border-gray-200",
-                    div { class: "text-3xl font-bold text-indigo-600", "{progress}%" }
-                    p { class: "text-sm text-gray-600", "Overall completion" }
+                div { class: "p-4 bg-white/5 rounded-lg border border-white/10",
+                    div { class: "text-3xl font-bold text-teal-300", "{progress}%" }
+                    p { class: "text-sm text-gray-400", "Overall completion" }
                 }
-                div { class: "p-4 bg-white rounded-lg border border-gray-200",
-                    div { class: "text-3xl font-bold text-gray-900", "{total}" }
-                    p { class: "text-sm text-gray-600", "Total skills to learn" }
+
+                div { class: "p-4 bg-white/5 rounded-lg border border-white/10",
+                    div { class: "text-3xl font-bold text-gray-100", "{total}" }
+                    p { class: "text-sm text-gray-400", "Total skills to learn" }
                 }
-                div { class: "p-4 bg-white rounded-lg border border-gray-200",
-                    div { class: "text-3xl font-bold text-green-600", "{completed}" }
-                    p { class: "text-sm text-gray-600", "Skills completed" }
+
+                div { class: "p-4 bg-white/5 rounded-lg border border-white/10",
+                    div { class: "text-3xl font-bold text-green-300", "{completed}" }
+                    p { class: "text-sm text-gray-400", "Skills completed" }
                 }
             }
         }
