@@ -1,5 +1,3 @@
-skillforge/
-
 # SkillForge
 
 SkillForge is a fullstack, AI-powered platform for generating, tracking, and personalizing learning roadmaps. It combines a modern Rust/Dioxus web application with robust data collection, enrichment, and processing pipelines in both Rust and Python. The system is designed for extensibility, automation, and high-quality learning resource curation.
