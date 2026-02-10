@@ -393,7 +393,7 @@ fn GeneratingStep() -> Element {
             }
             h3 { class: "text-2xl font-bold text-gray-100 mb-3", "Crafting Your Roadmap..." }
             p { class: "text-gray-400 mb-6",
-                "Our AI is analyzing thousands of resources to create the perfect learning path for you."
+                "Our AI is analyzing thousands of resources to create the perfect learning path for you. (May take upto a minute)"
             }
             div { class: "space-y-2 text-sm text-gray-500",
                 p { "✓ Analyzing your responses" }

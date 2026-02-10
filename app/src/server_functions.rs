@@ -332,7 +332,11 @@ pub async fn get_user_roadmaps(session_token: String) -> Result<Vec<Roadmap>, Se
     let db = get_db().await?;
 
     let user = get_user_data(session_token).await?;
-    let user_id = user.id.ok_or(ServerFnError::new("User ID not found"))?;
+    let user_id: RecordId = user
+        .id
+        .ok_or(ServerFnError::new("User ID not found"))?
+        .parse()
+        .into_server_error()?;
 
     let mut result = db
         .query("SELECT * FROM roadmaps WHERE user_id = $user_id ORDER BY updated_at DESC")
@@ -756,42 +760,48 @@ pub async fn toggle_node_completion(
 ) -> Result<(), ServerFnError> {
     let db = get_db().await?;
     let id = RecordId::from_str(&roadmap_id).into_server_error()?;
+
     let mut roadmap: RoadmapDB = db
         .select(&id)
         .await
         .into_server_error()?
         .ok_or_else(|| ServerFnError::new("Roadmap not found"))?;
-    let mut skill_modified = String::new();
-    let mut was_completed = true;
-    let user_id = roadmap.user_id.clone();
 
+    let user_id = roadmap.user_id.clone();
+    let mut skill_target_name = String::new();
+    let mut is_completed_now = false;
+
+    // 2. Toggle the node status in memory
     if let Some(node) = roadmap.nodes.iter_mut().find(|n| n.id == node_id) {
         node.is_completed = !node.is_completed;
-        was_completed = node.is_completed;
-        skill_modified = node.skill_name.clone();
+        is_completed_now = node.is_completed;
+        skill_target_name = node.skill_name.clone();
+    } else {
+        return Err(ServerFnError::new("Node not found in roadmap"));
     }
-
-    let skill_modified = UserSkills {
-        skillname: skill_modified,
-        date_learnt: Utc::now(),
-    };
 
     roadmap.updated_at = Utc::now();
 
-    if was_completed {
+    let _: Option<RoadmapDB> = db.update(id).content(roadmap).await.into_server_error()?;
+
+    db.query("UPDATE $uid SET skills_learned = skills_learned[WHERE skillname != $target]")
+        .bind(("uid", user_id.clone()))
+        .bind(("target", skill_target_name.clone()))
+        .await
+        .into_server_error()?;
+
+    if is_completed_now {
+        let new_skill = UserSkills {
+            skillname: skill_target_name,
+            date_learnt: Utc::now(),
+        };
+
         db.query("UPDATE $uid SET skills_learned += $skill")
             .bind(("uid", user_id))
-            .bind(("skill", skill_modified))
-            .await
-            .into_server_error()?;
-    } else {
-        db.query("UPDATE $uid SET skills_learned -= $skill")
-            .bind(("uid", user_id))
-            .bind(("skill", skill_modified))
+            .bind(("skill", new_skill))
             .await
             .into_server_error()?;
     }
-    let _: Option<RoadmapDB> = db.update(id).content(roadmap).await.into_server_error()?;
 
     Ok(())
 }
