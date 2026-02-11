@@ -370,12 +370,12 @@ pub async fn generate_questions(
 ) -> Result<Vec<Question>, ServerFnError> {
     let user: User = get_user_data(session_token).await?;
     let prompt = format!(
-        "Generate 8 questions to evaluate a user's learning preferences and existing knowledge for learning {}. \n\
+        "Generate 10 questions to evaluate a user's learning preferences and existing knowledge for learning {}. \n\
         User's existing skills: {:?}\n\
         User's preferences: {:?}\n\n\
         Generate:\n\
         - 5 preference questions (learning style, time commitment, content type preferences)\n\
-        - 3 knowledge evaluation questions (to test existing knowledge)\n\n\
+        - 5 knowledge evaluation questions (to test existing knowledge)\n\n\
         Format strictly as JSON array with: question_text, question_type (MCQ/MSQ/TrueFalse/OneWord), options (array of strings, empty for OneWord)",
         skill_name,
         user.skills_learned,
@@ -384,6 +384,88 @@ pub async fn generate_questions(
 
     let questions = call_openrouter_for_questions(&prompt).await?;
     Ok(questions)
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct SkillGapAnalysis {
+    pub current_knowledge: Vec<String>,
+    pub future_mastery: Vec<String>,
+}
+
+#[cfg(feature = "server")]
+pub async fn get_user_skill_info_for_roadmap(
+    user: &User,                    // PASS THE CLIENT! Don't create new() every time.
+    responses: &[QuestionResponse], // Use slice &[T] instead of &Vec<T>
+    skill_name: &str,
+    roadmap: &Vec<RoadmapNode>,
+) -> Result<(Vec<String>, Vec<String>)> {
+    let client = reqwest::Client::new();
+    let api_key = std::env::var("OPENROUTER_API_KEY").context("API Key missing")?;
+
+    let sys_prompt = r#"
+You are an expert Educational Analyst for 'SkillForge'. Your job is to analyze a user's quiz performance to determine their 'Knowledge Gap'.
+
+INPUT DATA:
+1. Target Skill: The main subject the user wants to learn.
+2. Quiz Performance: A list of questions the user answered, you are to evaluate correctness.
+3. User's existing skills (maybe incorrect): A list of skills that the user already knows, based on their profile. This may be inaccurate so in case of confilct with quiz performance's results, you should favour the outcome of quiz performce's evaluation result.
+4. Nodes of the roadmap that the user is going to follow to learn the new skill.
+
+YOUR TASK:
+1. Analyze the 'Quiz Performance'.
+   - If the user answered correctly, identify the specific sub-skill they possess. Add this to 'current_knowledge'.
+   - If the user answered incorrectly OR if the topic is a standard part of the Target Skill but wasn't tested, it belongs in the future learning path.
+   -Note, you are to add only the name of the skill (like python, accounts, etc.), and nothing else
+2. Generate 'future_mastery'. This should be a comprehensive list of high-level learning outcomes one would achieve after completing a full roadmap for the 'Target Skill'.
+   - This list should ONLY include both the things they missed AND are in the given roadmap that they are going to follow. It should only be the name of the skill (like python, math, accounting, etc.), and not a full statement
+
+OUTPUT FORMAT:
+Return strictly a JSON object. Do not include markdown formatting (like ```json).
+{
+    "current_knowledge": ["List of concepts the user definitely knows based on correct answers"],
+    "future_mastery": ["List of all key skills/outcomes provided by a complete roadmap for this topic"]
+}
+"#;
+
+    let user_prompt = format!(
+        "Target Skill: {}\n\nQuiz Performance:{:?}\n\nUser Skills:{:?}\n\nRoadmap:{:?}",
+        skill_name, responses, user.skills_learned, roadmap
+    );
+
+    let body = serde_json::json!({
+        "model": LLM_MODEL,
+        "messages": [
+            { "role": "system", "content": sys_prompt },
+            { "role": "user", "content": user_prompt }
+        ],
+        "temperature": 0.2,
+    });
+
+    let response = client
+        .post("https://openrouter.ai/api/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await?;
+        return Err(anyhow::anyhow!("LLM API Error: {}", error_text));
+    }
+
+    let json_resp: serde_json::Value = response.json().await?;
+
+    let content = json_resp["choices"][0]["message"]["content"]
+        .as_str()
+        .context("No content in LLM response")?;
+
+    // Sanitize and Parse
+    let content = clean_json_response(content);
+    let analysis: SkillGapAnalysis =
+        serde_json::from_str(&content).context(format!("Failed to parse LLM JSON: {}", content))?;
+
+    Ok((analysis.current_knowledge, analysis.future_mastery))
 }
 
 #[server]
@@ -404,11 +486,15 @@ pub async fn generate_roadmap(
     let relevant_resources = search_vector_db_multi_query(&query_variations).await?;
     let roadmap_nodes =
         generate_roadmap_with_llm(&skill_name, &user, &responses, &relevant_resources).await?;
+    let (skills_prev_known, learning_outcomes): (Vec<String>, Vec<String>) =
+        get_user_skill_info_for_roadmap(&user, &responses, &skill_name, &roadmap_nodes).await?;
 
     let user_id: RecordId = user_id.parse().into_server_error()?;
     let roadmap = RoadmapDB {
         id: None,
         user_id,
+        learning_outcomes,
+        skills_prev_known,
         skill_name,
         nodes: roadmap_nodes,
         created_at: Utc::now(),
@@ -549,7 +635,7 @@ async fn generate_roadmap_with_llm(
 User Profile:\n\
 - Existing skills: {:?}\n\
 - Learning preferences: {:?}\n\
-- Question responses: {:?}\n\n\
+- Question responses(For you to evaluate user's knowledge and preferences): {:?}\n\n\
 Available Resources:\n\
 {}\n\n\
 OUTPUT FORMAT (STRICT):\n\
@@ -638,7 +724,7 @@ async fn call_openrouter_for_questions(prompt: &str) -> Result<Vec<Question>> {
            - Ask about content depth preferences (deep-dive vs overview)\n\
            - Ask about preferred resource types (courses/books/projects/docs)\n\
            - Ask about learning goals (career/hobby/certification)\n\
-        2. Knowledge Questions (3 questions):\n\
+        2. Knowledge Questions (5 questions):\n\
            - Assess prerequisite knowledge relevant to the skill\n\
            - Test understanding of fundamental concepts\n\
            - Gauge experience level accurately\n\n\

@@ -12,8 +12,7 @@ pub const LOAD_AND_EMBED_JSON: bool = false;
 pub const SESSION_DURATION_DAYS: i64 = 2;
 /*
 TODO:
-1. Show Users how much they currently have, before learning
-2. Graphical representation of learning stats
+1. Show Users how much they currently know, before learning, and what they will learn upon the completion of the given roadmap
 */
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]

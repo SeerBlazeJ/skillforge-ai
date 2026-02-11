@@ -79,6 +79,8 @@ pub struct Session {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Roadmap {
     pub id: Option<String>,
+    pub skills_prev_known: Vec<String>,
+    pub learning_outcomes: Vec<String>,
     pub user_id: String,
     pub skill_name: String,
     pub nodes: Vec<RoadmapNode>,
@@ -90,6 +92,8 @@ pub struct Roadmap {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RoadmapDB {
     pub id: Option<RecordId>,
+    pub skills_prev_known: Vec<String>,
+    pub learning_outcomes: Vec<String>,
     pub user_id: RecordId,
     pub skill_name: String,
     pub nodes: Vec<RoadmapNode>,
@@ -103,6 +107,8 @@ impl From<RoadmapDB> for Roadmap {
         Self {
             id: value.id.map(|r| r.to_string()),
             user_id: value.user_id.to_string(),
+            skills_prev_known: value.skills_prev_known,
+            learning_outcomes: value.learning_outcomes,
             skill_name: value.skill_name,
             nodes: value.nodes,
             created_at: value.created_at,
@@ -117,6 +123,8 @@ impl From<Roadmap> for RoadmapDB {
     fn from(value: Roadmap) -> Self {
         Self {
             id: value.id.and_then(|s| s.parse().ok()),
+            skills_prev_known: value.skills_prev_known,
+            learning_outcomes: value.learning_outcomes,
             user_id: value.user_id.parse().unwrap(),
             skill_name: value.skill_name,
             nodes: value.nodes,
